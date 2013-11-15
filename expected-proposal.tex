@@ -1,0 +1,314 @@
+\documentclass[a4paper,10pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{url}
+\usepackage{lmodern}
+\usepackage{listings}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage[T1]{fontenc}
+\usepackage{textcomp}
+\usepackage{hyperref}
+\usepackage{array}
+
+\hypersetup{
+  hidelinks
+}
+
+\usepackage[top=2cm, bottom=3cm, left=3cm, right=3cm]{geometry}
+
+\usepackage{color}
+\usepackage{textpos}
+\usepackage{titling}
+
+\newcommand{\cpp}[1]{\lstinline{#1}}
+ 
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+ 
+\lstset{
+  language=c++,                % the language of the code
+  basicstyle=\footnotesize,       % the size of the fonts that are used for the code
+  numbers=left,                   % where to put the line-numbers
+  numberstyle=\tiny\color{gray},  % the style that is used for the line-numbers
+  stepnumber=0,                   % the step between two line-numbers. If it's 1, each line 
+                                  % will be numbered
+  numbersep=5pt,                  % how far the line-numbers are from the code
+  backgroundcolor=\color{white},      % choose the background color. You must add \usepackage{color}
+  showtabs=false,                 % show tabs within strings adding particular underscores
+  frame=single,                   % adds a frame around the code
+  rulecolor=\color{black},        % if not set, the frame-color may be changed on line-breaks within not-black text (e.g. comments (green here))
+  tabsize=2,                      % sets default tabsize to 2 spaces
+  captionpos=b,                   % sets the caption-position to bottom
+  breaklines=true,                % sets automatic line breaking
+  breakatwhitespace=false,        % sets if automatic breaks should only happen at whitespace
+  title=\lstname,                   % show the filename of files included with \lstinputlisting;
+                                  % also try caption instead of title
+  keywordstyle=\color{blue},          % keyword style
+  commentstyle=\color{dkgreen},       % comment style
+  stringstyle=\color{mauve},         % string literal style
+  morekeywords={initial\_state, final\_state, nextstate},
+  extendedchars=true,
+  literate={é}{{\'e}}1 {è}{{\`e}}1 {à}{{\`a}}1 {ç}{{\c{c}}}1 {œ}{{\oe}}1 {ù}{{\`u}}1
+  {É}{{\'E}}1 {È}{{\`E}}1 {À}{{\`A}}1 {Ç}{{\c{C}}}1 {Œ}{{\OE}}1 {Ê}{{\^E}}1
+  {ê}{{\^e}}1 {î}{{\^i}}1 {ô}{{\^o}}1 {û}{{\^u}}1
+}
+\setlength{\droptitle}{10em}
+\title{A proposal to add a utility class to represent expected objects}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+\begin{textblock*}{9cm}(7cm,-8cm)
+\begin{tabular}{l l}
+\textbf{Document number:} & Dxxxx=xx-xxxx \\
+\textbf{Date:}  & \today \\
+\textbf{Revises:} & None \\
+\textbf{Project:} & JTC1.22.32 Programming \\
+ & Language C++ \\
+\textbf{Reply to:} & Vicente J. Botet Escriba \\
+ & <\href{mailto:vicente.botet@wanadoo.fr}{vicente.botet@wanadoo.fr}> \\
+ & Pierre Talbot <\href{mailto:ptalbot@hyc.io}{ptalbot@hyc.io}>
+\end{tabular}
+\end{textblock*}
+
+\vspace{-6em}
+\setcounter{tocdepth}{1}
+\tableofcontents
+
+\section{Introduction}
+
+Class template \cpp{expected<T,E>} proposed here is a type that may contain a value of type \cpp{T} or a value of type \cpp{E} in its storage space. \cpp{T} represents the expected value, \cpp{E} represents the exceptional reason why it doesn't contains a value of type \cpp{T}. Its interface allows to query if the underlying value is either the expected value (of type \cpp{T}) or an error value (of type \cpp{E}). The original idea comes from Andrei Alexandrescu C++ and Beyond 2012: Systematic Error Handling in C++ talk [2]. The interface is based on \cpp{std::optional} N3793 [1] and Haskell monad either [3]. It requires no changes to core language, and breaks no existing code.
+
+\section{Motivation and Scope}
+
+Basically, the two main error mechanisms are exceptions and return codes. Before further explanation, we should ask us what are the characteristics of a good error mechanism.
+
+\begin{itemize}
+ \item \textbf{Error visibility} Failure cases should appears throughout the code review. Because the debug can be painful if the errors are hidden.
+ \item \textbf{Information on errors} The errors should carry out as most as possible information from their origin, causes and possibly the ways to resolve it.
+ \item \textbf{Clean code} The treatment of errors should be in a separate layer of code and as much invisible as possible. So the code reader could notice the presence of exceptional cases without stop his reading.
+ \item \textbf{Intrusive error} The errors should not monopolize a communication channel dedicated to the normal code flow. They must be as discrete as possible. For instance, the return of a function is a channel that should not be exclusively reserved for errors.
+\end{itemize}
+
+The first and the third characteristic are quite contradictory. The former points out that errors not handled should appear clearly in the code. The latter tells us that the error handling mustn't interfere with the code reading, meaning that it clearly shows the normal execution flow. A comparison between the exception and return codes is given in the table \ref{comp-handling-error}.
+
+
+\begin{table}
+\bgroup
+\def\arraystretch{1.5}
+\begin{tabular}{|l|>{\raggedright\arraybackslash}p{5cm}|>{\raggedright\arraybackslash}p{5cm}|}
+\hline
+                    & \textbf{Exception} & \textbf{Return code} \\
+\hline
+\textbf{Visibility} & Not visible without further analysis of the code. However, if an exception is thrown, we can follow the stack trace. & Visible at the first sight by watching the prototype of the called function. However ignoring return code can lead to undefined results and it can be hard to figure out the problem. \\
+\hline
+\textbf{Informations} & Exceptions can be arbitrarily rich. & Historically a simple integer. Nowadays, the header \cpp{<system_error>} provides richer error code. \\
+\hline
+\textbf{Clean code} & Provides clean code, exceptions can be completely invisible for the caller. & Force you to add, at least, a if statement after each function call. \\
+\hline
+\textbf{Intrusive} & Proper communication channel. & Monopolization of the return channel. \\
+\hline
+\end{tabular}
+\egroup
+\caption{Comparison between two error handling systems.}
+\label{comp-handling-error}
+\end{table}
+
+\section{Alexandrescu Expected class}
+
+We can do the same analysis for the \cpp{Expected<T>} class from Alexandrescu talk [3]:
+
+\begin{itemize}
+ \item \textbf{Error visibility} It takes the best of the exception and error code. It's visible because the return type is Expected<T> and if the user ignore the error case, it throws the contained exception.
+ \item \textbf{Information} As rich as exception.
+ \item \textbf{Clean code} It's up to the programmer to choose handling errors as error code or to throw the contained exception.
+ \item \textbf{Intrusive} Use the return channel without monopolizing it.
+\end{itemize}
+
+\noindent
+Other characteristics of \cpp{Expected<T>}:
+
+\begin{itemize}
+ \item Associates errors with computational goals.
+ \item Naturally allows multiple exceptions inflight.
+ \item Switch between ``error handling'' and ``exception throwing'' styles.
+ \item Teleportation possible.
+ \begin{itemize}
+  \item Across thread boundaries.
+  \item Across nothrow subsystem boundaries.
+  \item Across time: save now, throw later.
+ \end{itemize}
+ \item Collect, group, combine exceptions.
+\end{itemize}
+
+\noindent
+However \cpp{Expected<T>} class also has some drawbacks:
+\begin{itemize}
+ \item The error code must be an exception.
+ \item It doesn't provide a better solution to resolve errors. You can throw or use the \cpp{hasException<E>()} function to test errors which is similar to the old switch case statement.
+ \item The function \cpp{hasException<E>()} test the type and so cannot distinguish two different errors from the same exception. Exception can contains multiple error case scenarios (think about \cpp{std::invalid_argument}).
+\end{itemize}
+
+\noindent
+The main enhancements or differences of the proposed \cpp{expected<T,E>} respect to \cpp{Expected<T>} are:
+\begin{itemize}
+ \item \cpp{expected<T,E>} is default constructible.
+ \item \cpp{expected<T,E>} parameterizes the root cause that prevents its creation, \cpp{expected<T,E>} is either a \cpp{T} or the root cause \cpp{E} that prevents its creation. The default type \cpp{E} would be \cpp{std::exception_ptr} as the exceptions seem to be the most used error-handling system. There is also some supports for the classes in the \cpp{<system_error>} header.
+ \item \cpp{expected<T,E>} is a monad.
+\end{itemize}
+
+\section{Use case scenario}
+
+We should wonder what every programmers do when a function call returns an error:
+
+\begin{enumerate}
+ \item Nothing.
+ \item Delegate the responsibility of error handling to higher layer.
+ \item Trying to resolve the error.
+\end{enumerate}
+
+Because the first behavior leads to buggy application, we won't consider it in a first time. Consider the following ``pseudo coded'' mock function:
+
+\begin{lstlisting}
+EXPECTED int mock_connect(const string& hostname, const string& passwd, bool timed_out){
+  if(passwd != "passwd")
+      return connection refused ERROR
+  else if(hostname != "localhost")
+      return host unreachable ERROR
+  else if(timed_out)
+      return timed out ERROR
+  return HANDLE 0
+}
+\end{lstlisting}
+
+We imagine a scenario where:
+
+\begin{itemize}
+ \item The \textit{connection refused} error is resolved by asking the user another password.
+ \item The \textit{host unreachable} error is delegated to the upper layer.
+ \item The \textit{time out} error is resolved at the next try.
+\end{itemize}
+
+\subsection{Exception-based expected}
+
+The code of the mock connect function is below. You can see that the errors are encapsulated into exceptions.
+TODO INSERT CODE
+From the caller, the code looks like:
+TODO INSERT CODE
+Moreover, we use an error resolver function to keep the code as clean as possible.
+TODO INSERT CODE
+The next section shows how to do the same things with the standard error code (\cpp{std::error_condition}).
+
+\subsection{Error-based expected}
+
+We use the class \cpp{expected_or_error} which looks like the class expected without the exception.
+TODO INSERT CODE
+From the caller, the code looks like:
+TODO INSERT CODE
+And finally the error resolver:
+TODO INSERT CODE
+We can see that the code is quite similar between both classes. It's mainly because we didn't use the exception facility of the expected class.
+
+\subsection{Result}
+
+The result of the both codes is the same TODO INSERT CODE
+
+\section{Impacts on the Standard}
+
+These changes are entirely based on library extensions and do not require any language features beyond what is available in C++ 14. It requires however the \cpp{in_place_t} from N.
+
+\section{Design rationale}
+
+\subsection{\cpp{expected<>} is not always default constructible}
+\cpp{expected<T,E>} is intended to be used as result type of a function. Providing default constructor would allow to write code
+
+\begin{lstlisting}
+expected<T,E> e;
+e = f(...);
+\end{lstlisting}
+
+but this would need to add an additional init bool member. If the user wants he would use a combination of optional and expected:
+
+\begin{lstlisting}
+optional<expected<T,E>> oe;
+oe = f(...);
+\end{lstlisting}
+
+\subsection{Making \cpp{expected<T,E>} default constructible}
+
+It is possible to make it default constructible adding an additional init bool member. \\
+It is possible to make it default constructible by default constructing to the default constructor of E. So if  E is default constructible, as it is the case of \cpp{std::exception_ptr} and \cpp{std::error_condition}, \cpp{expected<T,E>} is default constructible.
+
+\subsection{About \cpp{nullexpected}}
+While \cpp{expected<int,std::exception_ptr>} has a natural default constructor, \cpp{expected<int, std::exception_ptr> ei;}
+and can be disengaged assigning \cpp{std::exception_ptr()}, it is less obvious how to disengage a \cpp{expected<int, std::condition_error>}. For this it could be more natural to make use of \cpp{nullexpected}.
+
+\begin{lstlisting}
+expected<int, std::condition_error> ei;
+…
+ei =  std::nullexpected;
+\end{lstlisting}
+
+\section{Related work}
+
+\subsection{Either monad and Variant}
+
+\cpp{expected<T,E>} can be seen as a specialization of a possible \cpp{either<T,E>} or \cpp{boost::variant<T,E>} which gives a specific intent to its first parameter, that is, it represent the type of the expected contained value. This specificity allows to provide a pointer like interface, as it is the case for \cpp{expected<T, E>}. Even if the standard contained a class \cpp{either<T,E>} or \cpp{variant<T,E>}, the interface provided by expected<T,E> is more specific and closer to what the user could expect as the result type of a function. In addition, \cpp{expected<T,E>} doesn't intend to be used to define recursive data as \cpp{boost::variant} does.
+
+\subsection{Optional}
+
+We can see \cpp{expected<T,E>} as an optional that collapse all the values of \cpp{E} to \cpp{nullopt}. We can convert an \cpp{expected<T, E>} to an \cpp{optional<T>} with the possible loss of information.
+
+\begin{lstlisting}
+template <class T>
+optional<T> optional_cast(expected<T,E>);
+\end{lstlisting}
+
+We can convert an \cpp{optional<T>} to an \cpp{expected<T>} with the possible loss of the cause.
+
+\begin{lstlisting}
+template <class T>
+expected<T> expected_cast(optional<T>);
+\end{lstlisting}
+
+\subsection{Promise and Future}
+
+We can see \cpp{expected<T,std::exception_ptr>} as an immediate \cpp{future<T>}.
+While promise/future focuses on inter-thread asynchronous communication, excepted focus on eager and synchronous computations.
+We can move \cpp{future<T>} to an \cpp{expected<T, std::exception_ptr>} with no loss of information. At the end, the underlying type of \cpp{future<T>} could be \cpp{expected<T, std::exception_ptr>}.
+
+\begin{lstlisting}
+template <class T>
+expected<T> expected_cast(future<T>&&);
+\end{lstlisting}
+
+\subsection{Expected monad}
+
+As for the \cpp{future<T>} proposal, \cpp{expected<T,E>} provides also a way to visit the stored values.
+\cpp{future<T>} provides a \cpp{then()} function that accepts a continuation having the \cpp{future<T>} as parameter. The synchronous nature of expected makes it more appropriated to use two functions, one to manage with the case expected has a value and one to try to recover otherwise. This is more in line with the monad interface, as any function having a T as parameter can be used as parameter of the apply function, no need to have a \cpp{expected<T>}. This make it easier to reuse functions. 
+
+\begin{itemize}
+ \item .apply/.recover are the counterpart of \cpp{future<T>.then()}
+ \item .unwrap is the counterpart of \cpp{future<T>.unwrap()}
+ \item .valid is the counterpart of \cpp{future<T>.is_ready()}
+ \item \cpp{if_all} and \cpp{if_any} are the counterpart of \cpp{when_all()} and \cpp{when_any()}
+\end{itemize}
+
+\section{Proposed Wording}
+
+\section{Implementability}
+This proposal can be implemented as pure library extension, without any compiler magic support, in C++14. An almost full reference implementation of this proposal can be found at TBoost.Expected [4]. 
+\section{Acknowledgement}
+
+We are very grateful to Andrei Alexandrescu for his talk, which was the origin of this work.
+We thanks also to every one that has contributed to the Haskell either monad, as either's interface was a source of inspiration.
+Thanks to Fernando Cacciola, Andrzej Krzemieński and every one that has contributed to the wording of N3793 [1].
+
+\newpage
+\bibliography{expected-proposal}{}
+\bibliographystyle{plain}
+
+\end{document}
