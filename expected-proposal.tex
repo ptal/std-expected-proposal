@@ -11,6 +11,7 @@
 \usepackage{hyperref}
 \usepackage{array}
 \usepackage{underscore}
+\usepackage{changepage}   % for the adjustwidth environment
 
 \hypersetup{
   hidelinks
@@ -73,9 +74,18 @@
 \vspace{7pt}
 }
 
-
 \newcommand{\cpp}[1]{\lstinline{#1}}
 
+% Wording items
+\newcommand{\wordingItem}[1]{\noindent\textit{#1:}}
+
+\newenvironment{wordingTextItem}[1]{\wordingItem{#1}\vspace{7pt}\noindent\begin{adjustwidth}{12pt}{}}{\vspace{7pt}\end{adjustwidth}}
+
+\newenvironment{wordingPara}{\begin{adjustwidth}{12pt}{}}{\end{adjustwidth}}
+
+\lstset{
+  xleftmargin=12pt
+}
 
 \setlength{\droptitle}{10em}
 \title{A proposal to add a utility class to represent expected objects}
@@ -489,6 +499,59 @@ Valued instances of \cpp{expected<T, E>} where T is of object type shall contain
 Members valued, val and except are provided for exposition only. Implementations need not provide those members. valued indicates whether the expected object's contained value has been initialized (and not yet destroyed); when valued is true val point to the contained value, and when it is false expect point to the exceptional value. \cpp{T} shall be an object type and shall satisfy the requirements of \cpp{Destructible} (Table 24).
 
 \wordingSubSubSec{Constructors}{expected.object.ctor}
+
+\begin{lstlisting}[xleftmargin=0pt]
+expected<T, E>::expected(const expected<T, E>& rhs);
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Requires} \cpp{is_copy_constructible<T>::value == true} and\\
+\cpp{is_copy_constructible<E>::value == true}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Effects}
+If \cpp{rhs} is valued initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the expression \cpp{*rhs}.\\
+
+\noindent
+If \cpp{rhs} is exceptional initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with the expression \cpp{rhs.error()}.
+\end{wordingTextItem}
+
+\begin{wordingTextItem}{Postconditions}
+\cpp{bool(rhs) == bool(*this)}.
+\end{wordingTextItem}
+
+\begin{wordingTextItem}{Throws}
+Any exception thrown by the selected constructor of \cpp{T} or \cpp{E}.
+\end{wordingTextItem}
+\end{wordingPara}
+
+\begin{lstlisting}[xleftmargin=0pt]
+expected<T, E>::expected(expected<T, E> && rhs) noexcept(/*see below*/);
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Requires}
+\cpp{is_move_constructible<T>::value == true} and \\
+\cpp{is_move_constructible<T>::value == true}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Effects}
+If \cpp{rhs} is valued initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the expression \cpp{std::move(*rhs)}. \cpp{bool(rhs)} is unchanged.\\
+
+\noindent
+If \cpp{rhs} is exceptional initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with the expression \cpp{std::move(rhs.error())}. \cpp{bool(rhs)} is unchanged.
+\end{wordingTextItem}
+
+\begin{wordingTextItem}{Postconditions}
+\cpp{bool(rhs) == bool(*this)}.
+\end{wordingTextItem}
+
+\begin{wordingTextItem}{Throws}
+Any exception thrown by the selected constructor of \cpp{T} or \cpp{E}.
+\end{wordingTextItem}
+
+\begin{wordingTextItem}{Remarks}
+The expression inside \cpp{noexcept} is equivalent to:\\
+\cpp{is_nothrow_move_constructible<T>::value && is_nothrow_move_constructible<E>::value}.
+\end{wordingTextItem}
+\end{wordingPara}
+
 
 \wordingSubSubSec{Destructor}{expected.object.dtor}
 
