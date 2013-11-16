@@ -114,7 +114,7 @@ Basically, the two main error mechanisms are exceptions and return codes. Before
  \item \textbf{Error visibility} Failure cases should appears throughout the code review. Because the debug can be painful if the errors are hidden.
  \item \textbf{Information on errors} The errors should carry out as most as possible information from their origin, causes and possibly the ways to resolve it.
  \item \textbf{Clean code} The treatment of errors should be in a separate layer of code and as much invisible as possible. So the code reader could notice the presence of exceptional cases without stop his reading.
- \item \textbf{Intrusive error} The errors should not monopolize a communication channel dedicated to the normal code flow. They must be as discrete as possible. For instance, the return of a function is a channel that should not be exclusively reserved for errors.
+ \item \textbf{Non-Intrusive error} The errors should not monopolize a communication channel dedicated to the normal code flow. They must be as discrete as possible. For instance, the return of a function is a channel that should not be exclusively reserved for errors.
 \end{itemize}
 
 The first and the third characteristic are quite contradictory. The former points out that errors not handled should appear clearly in the code. The latter tells us that the error handling mustn't interfere with the code reading, meaning that it clearly shows the normal execution flow. A comparison between the exception and return codes is given in the table \ref{comp-handling-error}.
@@ -133,7 +133,7 @@ The first and the third characteristic are quite contradictory. The former point
 \hline
 \textbf{Clean code} & Provides clean code, exceptions can be completely invisible for the caller. & Force you to add, at least, a if statement after each function call. \\
 \hline
-\textbf{Intrusive} & Proper communication channel. & Monopolization of the return channel. \\
+\textbf{Non-Intrusive} & Proper communication channel. & Monopolization of the return channel. \\
 \hline
 \end{tabular}
 \egroup
@@ -149,7 +149,7 @@ We can do the same analysis for the \cpp{Expected<T>} class from Alexandrescu ta
  \item \textbf{Error visibility} It takes the best of the exception and error code. It's visible because the return type is Expected<T> and if the user ignore the error case, it throws the contained exception.
  \item \textbf{Information} As rich as exception.
  \item \textbf{Clean code} It's up to the programmer to choose handling errors as error code or to throw the contained exception.
- \item \textbf{Intrusive} Use the return channel without monopolizing it.
+ \item \textbf{Non-Intrusive} Use the return channel without monopolizing it.
 \end{itemize}
 
 \noindent
@@ -179,13 +179,242 @@ However \cpp{Expected<T>} class also has some drawbacks:
 \noindent
 The main enhancements or differences of the proposed \cpp{expected<T,E>} respect to \cpp{Expected<T>} are:
 \begin{itemize}
- \item \cpp{expected<T,E>} is default constructible.
  \item \cpp{expected<T,E>} parameterizes the root cause that prevents its creation, \cpp{expected<T,E>} is either a \cpp{T} or the root cause \cpp{E} that prevents its creation. The default type \cpp{E} would be \cpp{std::exception_ptr} as the exceptions seem to be the most used error-handling system. There is also some supports for the classes in the \cpp{<system_error>} header.
- \item \cpp{expected<T,E>} is a monad.
+ \item \cpp{expected<T,E>} is default constructible.
+ \item \cpp{expected<T,E>} is a monad (see [6]).
 \end{itemize}
 
-\section{Use case scenario}
 
+\section{Use cases}
+
+\subsection{Parse int}
+
+\begin{lstlisting}
+  expected<int> parseInt(const std::string& s) {
+    int result;
+    //...
+    if (nonDigit)  
+      return expected<int>::from_error(std::invalid_argument("not a number"));
+    //...
+    if (tooManyDigits) 
+      return expected<int>::from_error(std::out_of_range("overflow"));
+    //...
+    return make_expected(result);
+  }
+
+  // Caller
+  std::string s = readline();
+  auto x = parseInt(s).get(); // throw on error
+  auto y = parseInt(s); // won't throw
+  if (!y.valid()) {
+    // handle locally
+    if (y.has_exception<std::invalid_argument>()) {
+      // no digits
+      //...
+    }
+    y.get(); // just "re"throw the stored exception
+  }
+\end{lstlisting}
+
+Next follows the parseInt function using a specific error.
+
+\begin{lstlisting}
+  expected<int, myerrc> parseInt(const std::string& s)  {
+    int result;
+    //...
+    if (nonDigit)  
+      return make_expected_from_error<int>(myerrc::overflow);
+    //...
+    if (tooManyDigits)  
+      return make_expected_from_error<int>(myerrc::overflow);
+    //...
+    return make_expected(result);
+  }
+
+  // Caller
+  std::string s = readline();
+  auto x = parseInt(s).get(); // throws bad_exected_access(y.error()) on error
+  auto y = parseInt(s); // won't throw
+  if (!y.valid()) {
+    // handle locally
+    if (y.error() == std::errc::invalid_argument)  {
+      // no digits
+      //...
+    }
+    y.get(); // just throws bad_exected_access(y.error())
+  }
+\end{lstlisting}
+
+\subsection{Parse int range}
+
+Given a function that parses an int and one that matches a string
+
+\begin{lstlisting}
+expected<int> parseInt(iterator&);
+expected<void> matchesString(std::string, iterator&);
+\end{lstlisting}
+
+how to define a function that parses an int range"<int>..<int>"
+
+\begin{lstlisting}
+expected<std::pair<int,int>> parseIntRange(iterator& it);
+\end{lstlisting}
+
+
+Let me start by defining the function as if the functions throw an exception
+
+\begin{lstlisting}
+std::pair<int,int> parseIntRange(iterator it) {
+    auto f = parseInt(it);
+    auto m = matchesString(":", it).
+    auto l = parseInt(it);       
+    return make_pair(f, l);
+}
+\end{lstlisting}
+
+One solution consists to check if there is an error at every step. 
+
+\begin{lstlisting}
+expected<std::pair<int,int>> parseIntRange(iterator it) {
+    expected<int> f = parseInt(it);
+    if (! f.valid())  return expected<std::pair<int,int>>::from_exception(f.error());
+    expected<void> m = matchesString(":", it).
+    if (! m.valid())  return expected<std::pair<int,int>>::from_exception(m.error());
+    expected<int> l = parseInt(it);
+    if (! l.valid())   return expected<std::pair<int,int>>::from_exception(l.error());
+        
+    return make_expected(make_pair(f.get(), l.get()));
+}
+\end{lstlisting}
+
+Another consists in checking if we can continue at each step
+
+\begin{lstlisting}
+expected<std::pair<int,int>> parseIntRange(iterator it) {
+    expected<int> f = parseInt(it);
+    if ( f.valid())  {
+        expected<int> m = parse(":", it).
+        if (m.valid())  {
+            expected<int> l = parseInt(it);
+            if (l.valid())  return make_expected(make_pair(f.get(), l.get()));
+        }
+    }        
+    return expected<std::pair<int,int>>::from_exception(l.error());
+}
+\end{lstlisting}
+
+The preceding approaches contains too much noise respect to the exception based solution. An alternative consists in folding the result and use a continuation passing style. 
+
+\begin{lstlisting}
+expected<std::pair<int,int>> parseIntRange(iterator it) {
+    return                           parseInt(it). 
+    		next([&it](int f) {  fold(f, matchesString("..", it)); }). 
+    		next([&it](int f) {  fold(f, parseInt(it)); });
+}
+\end{lstlisting}
+
+Note that the control flow has disapered but the calls have been wrapped on some esoteric lambda. Let me analyze what is behind the scenes
+
+\begin{lstlisting}
+expected<std::pair<int,int>> parseIntRange(iterator it) {
+    return parseInt(it). // [1]
+    next([&it](int f) { //[2]
+        return fold(f, matchesString("..", it)); // [3]
+    }). 
+    next([&it](int f) { // [4]
+        return fold(f, parseInt(it)); // [5]
+    });
+}
+\end{lstlisting}
+
+Line 1: obtains an expected<int> possibly with the parsed int. 
+Line 2: the call to next() will return an expect<int> as the lambda returns an expect<int>. This is due to the fact that next unwraps the result so that expect<expect<int>> is unwrapped to expect<int>. 
+If it is valid it calls to the lambda and unwraps the result. It it it invalid, it returns an expect<int> with the obtained error.
+Line 3: returns an expected that combines first and the success of the call to  matchesString("..", it).
+Line4:  the call to next() will return an expect<std::pair<int,int>> as the lambda returns an expect<std::pair<int,int>>. This is due to the fact that next unwraps the result so that expect<expect<std::pair<int,int>>> is unwrapped to expect<std::pair<int,int>>. 
+If it is valid it calls to the lambda and unwraps the result. It it is invalid, it returns an expect<std::pair<int,int>> with the obtained error.
+Line 5: returns an expected that combines first and the success of the call to  parseInt(it).
+
+Next follows the fold function
+
+\begin{lstlisting}
+
+template<class T, class F>
+//requires ! is_void<result_of_t<F()>>::value
+expected<std::pair<T, result_of_t<F()>> fold(T first, F f);
+
+template<class T, class F>
+//requires is_void<result_of_t<F()>>::value
+expected<T> fold(T first, F f) {
+\end{lstlisting}
+
+When F() returns expected<void>, the following function will return an expected<T> . It contents depends on the result of the call to f. if the expected result is valid it return an expected with the first argument, otherwise, an expected with the error of the result of the fall to f.  
+
+When F() returns expected<U>, the following function will return an expected<std::pair<T,U>> . It contents depends on the result of the call to f. if the expected result is valid it return an expected with a pair of its first argument and the value of  the result of the call to f , otherwise, an expected with the error of the result of the fall to f.  
+
+This function is useful to store the result of several computations.
+
+\begin{lstlisting}
+
+template<class T, class F>
+//requires ! is_void<result_of_t<F()>>::value
+expected<std::pair<T, result_of_t<F()>> fold(T first, F f) {
+    auto second = f();
+    if (second.valid())
+        return make_expected(make_pair(first, *second));
+    } else  {
+        return expected<std::pair<T,int>>::from_exception(second.error());
+    }
+}
+template<class T, class F>
+//requires is_void<result_of_t<F()>>::value
+expected<T> fold(T first, F f) {
+    auto second = f();
+    if (second.valid())
+        return make_expected(first);
+    } else  {
+        return expected<std::pair<T,int>>::from_exception(second.error());
+    }
+}
+\end{lstlisting}
+
+Yet another alternative (even if it is not adapted to this example) could be to calculate all the expected and if all are valid return the expected result.
+
+\begin{lstlisting}
+expected<std::pair<int,int>> parseIntRange(iterator it) {
+    auto f = parseInt(it);
+    auto m = parse(":", it).
+    auto l = parseInt(it);
+    auto all = if_all(f,m,l);
+    if (all.valid()) return make_expected(make_pair(all.get()));
+    return expected<std::pair<int,int>>::from_exception(all.error());
+}
+\end{lstlisting}
+
+Let see how the function looks like if it return a tuple.
+
+\begin{lstlisting}
+expected<std::tuple<int,int>> parseIntRange(iterator it) {
+    auto f = parseInt(it);
+    auto m = parse(":", it).
+    auto l = parseInt(it);
+    return if_all(f, m, l);
+}
+\end{lstlisting}
+
+Note that this is very close to the exception based solution
+
+\begin{lstlisting}
+std::pair<int,int> parseIntRange(iterator it) {
+    auto f = parseInt(it);
+    auto m = matchesString(":", it).
+    auto l = parseInt(it);       
+    return make_pair(f, l);
+}
+\end{lstlisting}
+
+
+\subsection{xxx}
 We should wonder what every programmers do when a function call returns an error:
 
 \begin{enumerate}
@@ -219,68 +448,117 @@ We imagine a scenario where:
 \subsection{Exception-based expected}
 
 The code of the mock connect function is below. You can see that the errors are encapsulated into exceptions.
-TODO INSERT CODE
+\begin{lstlisting}
+expected<int> mock_connect(
+    const std::string& hostname, 
+    const std::string& passwd, 
+    bool timed_out) {
+  if(passwd != "passwd")
+      return expected<int>::from_exception(connection_refused());
+  else if(hostname != "localhost")
+      return expected<int>::from_exception(host_unreachable());
+  else if(timed_out)
+      return expected<int>::from_exception(timeout());
+  return expected<int>(0);
+}
+\end{lstlisting}
+
 From the caller, the code looks like:
+
+\begin{lstlisting}
+expected<int> connect_to_host(const std::string& host){
+  return mock_connect(host, ask_password(host), true)
+  .recover([](exception_ptr except){
+    bool timed_out = true;
+    expected<int> handle;
+    do { 
+      try {  
+        if (!valid) std::rethrow_exception(except);
+      } catch (const connection_refused& ex) {
+        std::cout << "Wrong password ?" << std::endl;
+        handle = mock_connect(host, ask_password(host), timed_out);
+      } catch (const timeout& ex) {
+        std::cout << "Error: timed out. Try again." << std::endl;
+        timed_out = false;
+        handle = mock_connect(host, ask_password(host), timed_out);
+      } catch (...) {
+        // Delegate responsibility to higher layer.
+        return make_expected<int>(except);      
+      }
+    } while(!handle.valid());
+    return handle;
+  }).then([](int value){
+    std::cout << "handle no: " << value << std::endl;
+  });
+}
+\end{lstlisting}
+
+Note the error resolver function to keep the code as clean as possible.
+
+\begin{lstlisting}
 TODO INSERT CODE
-Moreover, we use an error resolver function to keep the code as clean as possible.
-TODO INSERT CODE
+\end{lstlisting}
+
 The next section shows how to do the same things with the standard error code (\cpp{std::error_condition}).
 
 \subsection{Error-based expected}
 
 We use the class \cpp{expected_or_error} which looks like the class expected without the exception.
+
+\begin{lstlisting}
 TODO INSERT CODE
+\end{lstlisting}
+
 From the caller, the code looks like:
+
+\begin{lstlisting}
 TODO INSERT CODE
+\end{lstlisting}
+
 And finally the error resolver:
+
+\begin{lstlisting}
 TODO INSERT CODE
+\end{lstlisting}
+
 We can see that the code is quite similar between both classes. It's mainly because we didn't use the exception facility of the expected class.
 
 \subsection{Result}
 
-The result of the both codes is the same TODO INSERT CODE
+The result of the both codes is the same 
+
+\begin{lstlisting}
+TODO INSERT CODE
+\end{lstlisting}
 
 \section{Impacts on the Standard}
 
-These changes are entirely based on library extensions and do not require any language features beyond what is available in C++ 14. It requires however the \cpp{in_place_t} from N.
+These changes are entirely based on library extensions and do not require any language features beyond what is available in C++ 14. It requires however the \cpp{in_place_t} from N3793.
 
 \section{Design rationale}
 
-\subsection{\cpp{expected<>} is not always default constructible}
-\cpp{expected<T,E>} is intended to be used as result type of a function. Providing default constructor would allow to write code
 
-\begin{lstlisting}
-expected<T,E> e;
-e = f(...);
-\end{lstlisting}
+\subsection{Never-empty guaranty}
+As \cpp{boost::variant}, \cpp{expected<T,E>} ensures that it is never empty.
+All instances \cpp{v} of type \cpp{expected<T,E>} guarantee that \cpp{v} has constructed content of one of the types \cpp{T} or \cpp{E}, even if an operation on \cpp{v} has previously failed.
 
-but this would need to add an additional init bool member. If the user wants he would use a combination of optional and expected:
+This implies that expected may be viewed precisely as a union of exactly its bounded types. This "never-empty" property insulates the user from the possibility of undefined expected content and the significant additional complexity-of-use attendant with such a possibility.
 
-\begin{lstlisting}
-optional<expected<T,E>> oe;
-oe = f(...);
-\end{lstlisting}
+\subsection{\cpp{expected<T, E>} is default constructible if \cpp{T} is default constructible}
+
+\cpp{expected<T,E>} should behave as much as possible as \cpp{T}. 
 
 \subsection{Making \cpp{expected<T,E>} default constructible}
+It is possible to make it default constructible adding an additional \cpp{init} \cpp{bool} member, but this is in some way equivalent to have \cpp{optional<expected<T,E>>}, so this proposal doesn't propose default constructor for any \cpp{T}.
 
-It is possible to make it default constructible adding an additional init bool member. \\
-It is possible to make it default constructible by default constructing to the default constructor of E. So if  E is default constructible, as it is the case of \cpp{std::exception_ptr} and \cpp{std::error_condition}, \cpp{expected<T,E>} is default constructible.
+\subsection{Observers}
 
-\subsection{About \cpp{nullexpected}}
-While \cpp{expected<int,std::exception_ptr>} has a natural default constructor, \cpp{expected<int, std::exception_ptr> ei;}
-and can be disengaged assigning \cpp{std::exception_ptr()}, it is less obvious how to disengage a \cpp{expected<int, std::condition_error>}. For this it could be more natural to make use of \cpp{nullexpected}.
-
-\begin{lstlisting}
-expected<int, std::condition_error> ei;
-
-ei =  std::nullexpected;
-\end{lstlisting}
 
 \section{Related work}
 
 \subsection{Either monad and Variant}
 
-\cpp{expected<T,E>} can be seen as a specialization of a possible \cpp{either<T,E>} or \cpp{boost::variant<T,E>} which gives a specific intent to its first parameter, that is, it represent the type of the expected contained value. This specificity allows to provide a pointer like interface, as it is the case for \cpp{expected<T, E>}. Even if the standard contained a class \cpp{either<T,E>} or \cpp{variant<T,E>}, the interface provided by expected<T,E> is more specific and closer to what the user could expect as the result type of a function. In addition, \cpp{expected<T,E>} doesn't intend to be used to define recursive data as \cpp{boost::variant} does.
+\cpp{expected<T,E>} can be seen as a specialization of a possible \cpp{either<T,E>} or \cpp{boost::variant<T,E>} which gives a specific intent to its first parameter, that is, it represent the type of the expected contained value. This specificity allows to provide a pointer like interface, as it is the case for \cpp{std::experimental::optional<T>}. Even if the standard contained a class \cpp{either<T,E>} or \cpp{variant<T,E>}, the interface provided by expected<T,E> is more specific and closer to what the user could expect as the result type of a function. In addition, \cpp{expected<T,E>} doesn't intend to be used to define recursive data as \cpp{boost::variant<>} does.
 
 \subsection{Optional}
 
@@ -288,37 +566,78 @@ We can see \cpp{expected<T,E>} as an optional that collapse all the values of \c
 
 \begin{lstlisting}
 template <class T>
-optional<T> optional_cast(expected<T,E>);
+optional<T> optionalCast(expected<T,E> v) {
+  if (v.valid()) return make_optional(*v);
+  else nullopt;
+}
 \end{lstlisting}
 
-We can convert an \cpp{optional<T>} to an \cpp{expected<T>} with the possible loss of the cause.
+We can convert an \cpp{optional<T>} to an \cpp{expected<T>} with the possible loss of the root cause.
 
 \begin{lstlisting}
 template <class T>
-expected<T> expected_cast(optional<T>);
+expected<T> expectedCast(optional<T>) {
+  if (v.valid()) return make_expected(*v);
+  else expected<T>::from_exception();
+}
 \end{lstlisting}
 
 \subsection{Promise and Future}
 
-We can see \cpp{expected<T,std::exception_ptr>} as an immediate \cpp{future<T>}.
-While promise/future focuses on inter-thread asynchronous communication, excepted focus on eager and synchronous computations.
-We can move \cpp{future<T>} to an \cpp{expected<T, std::exception_ptr>} with no loss of information. At the end, the underlying type of \cpp{future<T>} could be \cpp{expected<T, std::exception_ptr>}.
+We can see \cpp{expected<T>} as an immediate \cpp{future<T>}.
+While \cpp{promise<>}/\cpp{future<>} focuses on inter-thread asynchronous communication, \cpp{excepted<>} focus on eager and synchronous computations.
+We can move a ready \cpp{future<T>} to an \cpp{expected<T>} with no loss of information. At the end, the underlying type of \cpp{future<T>} could be \cpp{shared_ptr<expected<T>>}.
 
 \begin{lstlisting}
 template <class T>
-expected<T> expected_cast(future<T>&&);
+expected<T> expectedCast(future<T>&& f) {
+  assert (f.ready() && "future not ready");
+  if (f.has_exception()) 
+    return expected<T>::from_exception(getExceptionPtr(f)); // (1)
+  else 
+    return make_expected(f.get());
+}
 \end{lstlisting}
+
+Remark: in line (1) we could use instead \cpp{std::future<T>::get_exception_ptr()}, which is now provided by Boost.Thread, that can be implemented by the library more efficiently than the user could do.
+
+We can combine them as follows
+
+\begin{lstlisting}
+fut.then([](future<int> f) { return expectedCast(f).
+	then([](i){ ... }).recover(...);}
+\end{lstlisting}
+
+We can create also a \cpp{future<T>} from an \cpp{expected<T>}.
+
+\begin{lstlisting}
+template <class T>
+future<T> make_ready_future(expected<T>&& e) {
+  if (e.valid()) 
+    return make_ready_future(e.get();
+  else 
+    return make_exceptional_future(f.error()); // (2)
+}
+\end{lstlisting}
+
+Remark: line (2) uses Boost.Thread provides
+
+\begin{lstlisting}
+future<T> make_exceptional_future(exception_ptr ex);
+\end{lstlisting}
+
 
 \subsection{Expected monad}
 
 As for the \cpp{future<T>} proposal, \cpp{expected<T,E>} provides also a way to visit the stored values.
-\cpp{future<T>} provides a \cpp{then()} function that accepts a continuation having the \cpp{future<T>} as parameter. The synchronous nature of expected makes it more appropriated to use two functions, one to manage with the case expected has a value and one to try to recover otherwise. This is more in line with the monad interface, as any function having a T as parameter can be used as parameter of the apply function, no need to have a \cpp{expected<T>}. This make it easier to reuse functions. 
+\cpp{future<T>} provides a \cpp{then()} function that accepts a continuation having the \cpp{future<T>} as parameter. The synchronous nature of expected makes it more appropriated to use two functions, one to manage with the case expected has a value and one to try to recover otherwise. This is more in line with the monad interface, as any function having a \cpp{T} as parameter can be used as parameter of the apply function, no need to have a \cpp{expected<T>}. This make it easier to reuse functions. 
 
 \begin{itemize}
- \item .apply/.recover are the counterpart of \cpp{future<T>.then()}
- \item .unwrap is the counterpart of \cpp{future<T>.unwrap()}
- \item .valid is the counterpart of \cpp{future<T>.is_ready()}
- \item \cpp{if_all} and \cpp{if_any} are the counterpart of \cpp{when_all()} and \cpp{when_any()}
+ \item \cpp{expected<T,E>::apply()}/\cpp{expected<T,E>::recover()} are the counterpart of \cpp{future<T>.then()}
+ \item \cpp{expected<T,E>::unwrap()} is the counterpart of \cpp{future<T>.unwrap()}
+ \item \cpp{expected<T,E>::has_value()} is the counterpart of \cpp{future<T>.has_value()}
+ \item \cpp{expected<T,E>::has_exception()} is the counterpart of \cpp{future<T>.has_exception()}
+ \item \cpp{expected<T,E>::if_all()} and \cpp{expected<T,E>::if_any()} are the counterpart of \cpp{when_all()} and \cpp{when_any()}
 \end{itemize}
 
 \section{Proposed Wording}
