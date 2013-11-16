@@ -1,5 +1,6 @@
 \documentclass[a4paper,10pt]{article}
-\usepackage[utf8]{inputenc}
+\usepackage[american]
+           {babel} % needed for iso dates
 \usepackage{url}
 \usepackage{lmodern}
 \usepackage{listings}
@@ -9,50 +10,73 @@
 \usepackage{textcomp}
 \usepackage{hyperref}
 \usepackage{array}
+\usepackage{underscore}
 
 \hypersetup{
   hidelinks
 }
 
-\usepackage[top=2cm, bottom=3cm, left=3cm, right=3cm]{geometry}
+\usepackage[top=2cm, bottom=2cm, left=2cm, right=2cm]{geometry}
 
 \usepackage{color}
 \usepackage{textpos}
 \usepackage{titling}
+\usepackage{titlesec}
+
+\setcounter{secnumdepth}{6}
+
+% From std draft
+% We use the 'listings' package, with some small customizations.  The
+% most interesting customization: all TeX commands are available
+% within comments.  Comments are set in italics, keywords and strings
+% don't get special treatment.
+% General code style
+\lstset{language=C++,
+        basicstyle=\small\ttfamily,
+        keywordstyle=,
+        stringstyle=,
+        xleftmargin=1em,
+        showstringspaces=false,
+        commentstyle=\itshape\rmfamily,
+        columns=flexible,
+        keepspaces=true,
+        texcl=true
+}
+% end from std draft
+
+\newcommand{\wordingSec}[2]{\vspace{15pt}
+\noindent
+{\large\textbf{X.Y\quad #1\hfill\textbf{[#2]}}}
+}
+
+% Counters
+\newcounter{countWordingSubSec}
+\newcounter{countWordingSubSubSec}[countWordingSubSec]
+
+\renewcommand{\thecountWordingSubSec}{X.Y.\arabic{countWordingSubSec}}
+\renewcommand{\thecountWordingSubSubSec}{X.Y.\arabic{countWordingSubSec}.\arabic{countWordingSubSubSec}}
+
+% Defs of sub and subsub section (for the wording).
+\newcommand{\wordingSubSec}[2]{\vspace{15pt}
+\refstepcounter{countWordingSubSec}
+\noindent
+{\textbf{\thecountWordingSubSec\quad #1\hfill\textbf{[#2]}}}
+\label{#2}
+\vspace{7pt}
+}
+
+\newcommand{\wordingSubSubSec}[2]{\vspace{15pt}
+\refstepcounter{countWordingSubSubSec}
+\noindent
+{\textbf{\thecountWordingSubSubSec\quad #1\hfill\textbf{[#2]}}}
+\label{#2}
+\vspace{7pt}
+}
+
 
 \newcommand{\cpp}[1]{\lstinline{#1}}
- 
-\definecolor{dkgreen}{rgb}{0,0.6,0}
-\definecolor{gray}{rgb}{0.5,0.5,0.5}
-\definecolor{mauve}{rgb}{0.58,0,0.82}
- 
-\lstset{
-  language=c++,                % the language of the code
-  basicstyle=\footnotesize,       % the size of the fonts that are used for the code
-  numbers=left,                   % where to put the line-numbers
-  numberstyle=\tiny\color{gray},  % the style that is used for the line-numbers
-  stepnumber=0,                   % the step between two line-numbers. If it's 1, each line 
-                                  % will be numbered
-  numbersep=5pt,                  % how far the line-numbers are from the code
-  backgroundcolor=\color{white},      % choose the background color. You must add \usepackage{color}
-  showtabs=false,                 % show tabs within strings adding particular underscores
-  frame=single,                   % adds a frame around the code
-  rulecolor=\color{black},        % if not set, the frame-color may be changed on line-breaks within not-black text (e.g. comments (green here))
-  tabsize=2,                      % sets default tabsize to 2 spaces
-  captionpos=b,                   % sets the caption-position to bottom
-  breaklines=true,                % sets automatic line breaking
-  breakatwhitespace=false,        % sets if automatic breaks should only happen at whitespace
-  title=\lstname,                   % show the filename of files included with \lstinputlisting;
-                                  % also try caption instead of title
-  keywordstyle=\color{blue},          % keyword style
-  commentstyle=\color{dkgreen},       % comment style
-  stringstyle=\color{mauve},         % string literal style
-  morekeywords={initial\_state, final\_state, nextstate},
-  extendedchars=true,
-  literate={é}{{\'e}}1 {è}{{\`e}}1 {à}{{\`a}}1 {ç}{{\c{c}}}1 {œ}{{\oe}}1 {ù}{{\`u}}1
-  {É}{{\'E}}1 {È}{{\`E}}1 {À}{{\`A}}1 {Ç}{{\c{C}}}1 {Œ}{{\OE}}1 {Ê}{{\^E}}1
-  {ê}{{\^e}}1 {î}{{\^i}}1 {ô}{{\^o}}1 {û}{{\^u}}1
-}
+
+
 \setlength{\droptitle}{10em}
 \title{A proposal to add a utility class to represent expected objects}
 \author{}
@@ -80,7 +104,7 @@
 
 \section{Introduction}
 
-Class template \cpp{expected<T,E>} proposed here is a type that may contain a value of type \cpp{T} or a value of type \cpp{E} in its storage space. \cpp{T} represents the expected value, \cpp{E} represents the exceptional reason why it doesn't contains a value of type \cpp{T}. Its interface allows to query if the underlying value is either the expected value (of type \cpp{T}) or an error value (of type \cpp{E}). The original idea comes from Andrei Alexandrescu C++ and Beyond 2012: Systematic Error Handling in C++ talk [2]. The interface is based on \cpp{std::optional} N3793 [1] and Haskell monad either [3]. It requires no changes to core language, and breaks no existing code.
+Class template \cpp{expected<T,E>} proposed here is a type that may contain a value of type \cpp{T} or a value of type \cpp{E} in its storage space. \cpp{T} represents the expected value, \cpp{E} represents the exceptional reason why it doesn't contains a value of type \cpp{T}. Its interface allows to query if the underlying value is either the expected value (of type \cpp{T}) or an error value (of type \cpp{E}). The original idea comes from Andrei Alexandrescu C++ and Beyond 2012: Systematic Error Handling in C++ talk \cite{AlexandrescuExpected}. The interface is based on \cpp{std::optional} N3793 \cite{OptionalRev5} and Haskell monad either. It requires no changes to core language, and breaks no existing code.
 
 \section{Motivation and Scope}
 
@@ -119,7 +143,7 @@ The first and the third characteristic are quite contradictory. The former point
 
 \section{Alexandrescu Expected class}
 
-We can do the same analysis for the \cpp{Expected<T>} class from Alexandrescu talk [3]:
+We can do the same analysis for the \cpp{Expected<T>} class from Alexandrescu talk \cite{AlexandrescuExpected}:
 
 \begin{itemize}
  \item \textbf{Error visibility} It takes the best of the exception and error code. It's visible because the return type is Expected<T> and if the user ignore the error case, it throws the contained exception.
@@ -299,16 +323,214 @@ As for the \cpp{future<T>} proposal, \cpp{expected<T,E>} provides also a way to 
 
 \section{Proposed Wording}
 
+The proposed changes have been modified to be expressed as edits to N3797, the C++ Draft Standard \cite{Cppdraft}. The wording has been adapted from N3797 \cite{OptionalRev5}.
+\newline
+
+Insert a new paragraph.
+
+\wordingSec{Expected library}{expected}
+
+\wordingSubSec{In general}{expected.general}
+
+This subclause describes class template expected that represents expected objects. An expected object for object type T is an object that contains the storage for another object and manages the lifetime of this contained object T, alternatively it could contain the storage for another exceptional object E. The contained object may not be initialized after the expected object has been initialized, and may not be destroyed before the expected object has been destroyed. The initialization state of the contained object is tracked by the expected object.
+
+\wordingSubSec{Header <experimental/expected> synopsis}{expected.synop}
+
+\begin{lstlisting}
+namespace std {namespace experimental {
+
+  // \ref{expected.object}, expected for object types  
+  template <class T, class E = exception_ptr>
+  class expected;
+  template <class E>
+  class expected<void, E>;
+  
+  // \ref{expected.exceptional}, exceptional construction
+  struct exceptional_t{};
+  constexpr exceptional_t exceptional{};
+  
+  // \ref{expected.unitialized}, class expected_unitialized 
+  class expected_unitialized;
+  
+  // \ref{expected.bad_expected_access}, class bad_expected_access
+  class bad_expected_access;
+  
+  // \ref{expected.relational_op}, Relational operators
+  template <class T>
+    constexpr bool operator==(const expected<T, E>&, const expected<T, E>&);
+  template <class T>
+    constexpr bool operator!=(const expected<T, E>&, const expected<T, E>&);
+  template <class T>
+    constexpr bool operator<(const expected<T, E>&, const expected<T, E>&);
+  template <class T>
+    constexpr bool operator>(const expected<T, E>&, const expected<T, E>&);
+  template <class T>
+    constexpr bool operator<=(const expected<T, E>&, const expected<T, E>&);
+  template <class T>
+    constexpr bool operator>=(const expected<T, E>&, const expected<T, E>&);
+    
+  // \ref{expected.comparison_T}, Comparison with T
+  template <class T> constexpr bool operator==(const expected<T, E>&, const T&);
+  template <class T> constexpr bool operator==(const T&, const expected<T, E>&);
+  template <class T> constexpr bool operator!=(const expected<T, E>&, const T&);
+  template <class T> constexpr bool operator!=(const T&, const expected<T, E>&);
+  template <class T> constexpr bool operator<(const expected<T, E>&, const T&);
+  template <class T> constexpr bool operator<(const T&, const expected<T, E>&);
+  template <class T> constexpr bool operator<=(const expected<T, E>&, const T&);
+  template <class T> constexpr bool operator<=(const T&, const expected<T, E>&);
+  template <class T> constexpr bool operator>(const expected<T, E>&, const T&);
+  template <class T> constexpr bool operator>(const T&, const expected<T, E>&);
+  template <class T> constexpr bool operator>=(const expected<T, E>&, const T&);
+  template <class T> constexpr bool operator>=(const T&, const expected<T, E>&);
+
+  // \ref{expected.specalg}, Specialized algorithms
+  template <class T> 
+    void swap(expected<T, E>&, expected<T, E>&) noexcept(see below);
+
+  // \ref{expected.factories}, Factories
+  template <class T>
+    constexpr expected<typename decay<T>::type> make_expected(T&& v); 
+  template <class T> constexpr expected<see below> make_expected(T&&);
+  template <> constexpr expected<void> make_expected(); 
+  template <class T>
+   constexpr expected<T> make_expected_from_exception(std::exception_ptr v); 
+  template <class T, class E>
+   constexpr expected<T> make_expected_from_exception(E&& v);
+  template <class T>
+   constexpr expected<T> make_expected_from_exception(); 
+  template <class F>
+   constexpr typename expected<typename result_type<F>::type
+   make_expected_from_call(F f);
+
+  // \ref{expected.hash}, hash support
+  template <class T> struct hash;
+  template <class T> struct hash<expected<T, E>>;
+}}
+\end{lstlisting}
+
+\wordingSubSec{Definitions}{expected.defs}
+
+An instance of \cpp{expected<T,E>} is said to be valued if it contains an object of type \cpp{T}.
+An instance of \cpp{expected<T,E>} is said to be exceptional if it contains an object of type \cpp{E}.
+
+\wordingSubSec{expected for object types}{expected.object}
+
+\begin{lstlisting}
+namespace std {
+namespace experimental {
+
+  template <class T, class E>
+  class expected
+  {
+  public:
+    typedef T value_type;
+    typedef E exceptional_type;
+    
+     // \ref{expected.object.ctor}, constructors
+    constexpr expected() noexcept;
+    //constexpr expected() = delete;
+    expected(const expected&);
+    expected(expected&&) noexcept(see below);
+    constexpr expected(const T&);
+    constexpr expected(T&&);
+    template <class... Args> 
+      constexpr explicit expected(in_place_t, Args&&...);
+    template <class U, class... Args>
+      constexpr explicit expected(in_place_t, initializer_list<U>, Args&&...);
+    constexpr expected(exceptional_t, const E&);
+    constexpr expected(exceptional_t, E&&);
+    template <class... Args> 
+      constexpr explicit expected(exceptional_t, in_place_t, Args&&...);
+    template <class U, class... Args>
+      constexpr explicit expected(exceptional_t, in_place_t,
+                                  initializer_list<U>, Args&&...);
+
+    // \ref{expected.object.dtor}, destructor
+    ~expected();
+
+    // \ref{expected.object.assign}, assignment
+    expected& operator=(const expected&);
+    expected& operator=(expected&&) noexcept(see below);
+    template <class U> expected& operator=(U&&);
+    template <class... Args> void emplace(Args&&...);
+    template <class U, class... Args>
+      void emplace(initializer_list<U>, Args&&...);
+
+    // \ref{expected.object.swap}, swap
+    void swap(expected&) noexcept(see below);
+
+    // \ref{expected.object.observe}, observers
+    constexpr T const* operator ->() const;
+    T* operator ->();
+    constexpr T const& operator *() const;
+    T& operator *();
+    constexpr explicit operator bool() const noexcept;
+    constexpr T const& value() const;
+    T& value();
+    constexpr E const& error() const;
+    E& error();
+    template <class U> constexpr T value_or(U&&) const&;
+    template <class U> T value_or(U&&) &&;
+
+  private:
+    bool valued; // exposition only
+    T*   val;    // exposition only
+    T*   error;  // exposition only
+  };
+
+} // namespace experimental
+} // namespace std
+\end{lstlisting}
+
+
+Valued instances of \cpp{expected<T, E>} where T is of object type shall contain a value of type \cpp{T} within its own storage. This value is referred to as the contained value of the expected object. Implementations are not permitted to use additional storage, such as dynamic memory, to allocate its contained value. The contained value shall be allocated in a region of the \cpp{expected<T, E>} storage suitably aligned for the type T.
+\newline
+
+Members valued, val and except are provided for exposition only. Implementations need not provide those members. valued indicates whether the expected object's contained value has been initialized (and not yet destroyed); when valued is true val point to the contained value, and when it is false expect point to the exceptional value. \cpp{T} shall be an object type and shall satisfy the requirements of \cpp{Destructible} (Table 24).
+
+\wordingSubSubSec{Constructors}{expected.object.ctor}
+
+\wordingSubSubSec{Destructor}{expected.object.dtor}
+
+\wordingSubSubSec{Assignment}{expected.object.assign}
+
+\wordingSubSubSec{Swap}{expected.object.swap}
+
+\wordingSubSubSec{Observers}{expected.object.observe}
+
+\wordingSubSec{Exceptional construction}{expected.exceptional}
+
+\begin{lstlisting}
+struct exceptional_t{}; 
+constexpr exceptional_t exceptional{};
+\end{lstlisting}
+\noindent
+The \cpp{struct exceptional_t} is an empty structure type used as a unique type to disambiguate constructor and function overloading. Specifically, \cpp{expected<T, E>} has a constructor with \cpp{exceptional_t} as the first argument followed by an E; this indicates that \cpp{expected<T, E>} should be constructed as exceptional. 
+
+\wordingSubSec{Class unitialized_expected}{expected.unitialized}
+
+\wordingSubSec{Class bad_expected_access}{expected.bad_expected_access}
+
+\wordingSubSec{Relational operators}{expected.relational_op}
+
+\wordingSubSec{Comparison with T}{expected.comparison_T}
+
+\wordingSubSec{Specialized algorithms}{expected.specalg}
+
+\wordingSubSec{Factories}{expected.factories}
+
+\wordingSubSec{Hash support}{expected.hash}
+
 \section{Implementability}
-This proposal can be implemented as pure library extension, without any compiler magic support, in C++14. An almost full reference implementation of this proposal can be found at TBoost.Expected [4]. 
+This proposal can be implemented as pure library extension, without any compiler magic support, in C++14. An almost full reference implementation of this proposal can be found at TBoost.Expected \cite{boost.expected}. 
 \section{Acknowledgement}
 
 We are very grateful to Andrei Alexandrescu for his talk, which was the origin of this work.
 We thanks also to every one that has contributed to the Haskell either monad, as either's interface was a source of inspiration.
-Thanks to Fernando Cacciola, Andrzej Krzemieński and every one that has contributed to the wording of N3793 [1].
+Thanks to Fernando Cacciola, Andrzej Krzemieński and every one that has contributed to the wording of N3793 \cite{OptionalRev5}.
 
 \newpage
-\bibliography{expected-proposal}{}
 \bibliographystyle{plain}
+\bibliography{references}
 
 \end{document}
