@@ -276,11 +276,11 @@ One solution consists to check if there is an error at every step.
 
 \begin{lstlisting}
 expected<std::pair<int,int>> parseIntRange(iterator it) {
-    expected<int> f = parseInt(it);
+    auto f = parseInt(it);
     if (! f.valid())  return expected<std::pair<int,int>>::from_exception(f.error());
-    expected<void> m = matchesString(":", it).
+    auto m = matchesString(":", it).
     if (! m.valid())  return expected<std::pair<int,int>>::from_exception(m.error());
-    expected<int> l = parseInt(it);
+    auto l = parseInt(it);
     if (! l.valid())   return expected<std::pair<int,int>>::from_exception(l.error());
         
     return make_expected(make_pair(f.get(), l.get()));
@@ -291,11 +291,11 @@ Another consists in checking if we can continue at each step
 
 \begin{lstlisting}
 expected<std::pair<int,int>> parseIntRange(iterator it) {
-    expected<int> f = parseInt(it);
+    auto f = parseInt(it);
     if ( f.valid())  {
-        expected<int> m = parse(":", it).
+        auto m = parse(":", it).
         if (m.valid())  {
-            expected<int> l = parseInt(it);
+            auto l = parseInt(it);
             if (l.valid())  return make_expected(make_pair(f.get(), l.get()));
         }
     }        
@@ -552,6 +552,82 @@ This implies that expected may be viewed precisely as a union of exactly its bou
 It is possible to make it default constructible adding an additional \cpp{init} \cpp{bool} member, but this is in some way equivalent to have \cpp{optional<expected<T,E>>}, so this proposal doesn't propose default constructor for any \cpp{T}.
 
 \subsection{Observers}
+
+\subsection{Which exception throw when when the user try to get the expected value but there is none?}
+
+It has been suggested to let the user decide the Exception, that would be throw when the user try to get the expected value but there is none, as third parameter. 
+
+While there is no major complexity doing it, as it just needs a third parameter that could default to the appropriated class, 
+
+\begin{lstlisting}
+template <class T, class Error, class Exception = bad_expected_access>
+  struct expected;
+\end{lstlisting}
+
+the authors consider that this is not really needed and that this parameter should not really be part of the type.
+
+The user can define
+
+\begin{lstlisting}
+template <class Exception, class T, class ErrorCode >
+  T GetOrThrow(expected<T,ErrorCode>&& v) {
+  if (e.valid()) return v.value();
+  else throw Exception(v.error());
+}
+\end{lstlisting}
+
+and use it as
+
+\begin{lstlisting}
+std::expected<int, std::error_code> f();
+std::expected<int, std::error_code> expect = f();
+auto i = GetOrThrow<std::system_error>(expct);  
+\end{lstlisting}
+
+This function could be added to the standard, but this proposal doesn't request it. 
+
+The user can also wrap the proposed class in its own expected class
+
+\begin{lstlisting}
+template <class T, class Error=std::error_code, class Exception=std::system_error>
+struct MyExpected {
+  expected <T,E> v;
+  MyExpected(expected <T,E> v) : v(v) {}
+  T get() {  
+    if (e.valid()) return v.value();
+    else throw Exception(v.error());
+  }
+  ...
+};
+\end{lstlisting}
+
+and use it as
+
+\begin{lstlisting}
+std::expected<int, std::error_code> f();
+MyExpected<int> expect = f();
+auto i = expct.get();  // std::system_error throw if not valid
+\end{lstlisting}
+
+A class like this one could be added to the standard, but this proposal doesn't request it. 
+
+\subsection{About expected<T, ErrorCode, Exception>}
+
+It has been suggested also to extend the design into something that contains 
+
+\begin{itemize}
+\item a T, or
+\item an exception_ptr, or 
+\item an error_code
+\end{itemize}
+
+Again there is no major difficulty to implement it, but instead of having one variation point we have two, that is is there a value, and if not, if is there an exception_ptr. While this would need only an extra test on the exceptional case, the authors think that it is not worth doing it as all the copy/move/swap operations would be less efficient.  
+
+\begin{lstlisting}
+template <class T, class ErrorCode = none, class Exception = expected_default_exception<ErrorCode>>
+  struct expected;
+\end{lstlisting}
+
 
 
 \section{Related work}
