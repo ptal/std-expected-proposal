@@ -1494,6 +1494,25 @@ constexpr typename expected<result_type<F>::type make_expected_from_call(F f);
 
 \wordingSubSec{Hash support}{expected.hash}
 
+\begin{lstlisting}[xleftmargin=0pt]
+template <class T, class E>
+struct hash<expected<T, E>>; 
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Requires}
+The template specilaization \cpp{hash<T>} and \cpp{hash<E>} shall meet the requirements of class template \cpp{hash} (Z.X.Y). The template specialization \cpp{hash<expected<T, E>>} shall meet the requirements of class template \cpp{hash}. For an object \cpp{o} of type \cpp{expected<T, E>}, \cpp{if bool(o) == true}, \cpp{hash<expected<T, E>>()(o)} shall evaluate to the same value as \cpp{hash<T, E>()(*o);} otherwise it evaluates to an unspecified value.
+\end{wordingTextItem}
+\end{wordingPara}
+
+\begin{lstlisting}[xleftmargin=0pt]
+template <class E>
+struct hash<expected<void, E>>;
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Requires}
+\end{wordingTextItem}
+\end{wordingPara}
+
 \section{Implementability}
 This proposal can be implemented as pure library extension, without any compiler magic support, in C++14. An almost full reference implementation of this proposal can be found at TBoost.Expected \cite{boost.expected}. 
 \section{Acknowledgement}
