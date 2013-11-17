@@ -1407,6 +1407,17 @@ Constructs an object of class \cpp{bad_expected_access}.
 
 \wordingSubSec{Specialized algorithms}{expected.specalg}
 
+% swap free function.
+\begin{lstlisting}[xleftmargin=0pt]
+template <class T, class E>
+void swap(expected<T, E>& x, expected<T, E>& y) noexcept(noexcept(x.swap(y))); 
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Effects}
+calls \cpp{x.swap(y)}.
+\end{wordingTextItem}
+\end{wordingPara}
+
 \wordingSubSec{Factories}{expected.factories}
 
 \wordingSubSec{Hash support}{expected.hash}
