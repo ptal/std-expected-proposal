@@ -115,10 +115,12 @@
 \tableofcontents
 
 \section{Introduction}
+%%%%%%%%%%%
 
 Class template \cpp{expected<T,E>} proposed here is a type that may contain a value of type \cpp{T} or a value of type \cpp{E} in its storage space. \cpp{T} represents the expected value, \cpp{E} represents the exceptional reason why it doesn't contains a value of type \cpp{T}. Its interface allows to query if the underlying value is either the expected value (of type \cpp{T}) or an error value (of type \cpp{E}). The original idea comes from Andrei Alexandrescu C++ and Beyond 2012: Systematic Error Handling in C++ talk \cite{AlexandrescuExpected}. The interface is based on \cpp{std::optional} N3793 \cite{OptionalRev5} and Haskell monad either. It requires no changes to core language, and breaks no existing code.
 
 \section{Motivation and Scope}
+%%%%%%%%%%%%%%%%
 
 Basically, the two main error mechanisms are exceptions and return codes. Before further explanation, we should ask us what are the characteristics of a good error mechanism.
 
@@ -154,6 +156,7 @@ The first and the third characteristic are quite contradictory. The former point
 \end{table}
 
 \section{Alexandrescu Expected class}
+%%%%%%%%%%%%%%%%%%%%
 
 We can do the same analysis for the \cpp{Expected<T>} class from Alexandrescu talk \cite{AlexandrescuExpected}:
 
@@ -193,13 +196,14 @@ The main enhancements or differences of the proposed \cpp{expected<T,E>} respect
 \begin{itemize}
  \item \cpp{expected<T,E>} parameterizes the root cause that prevents its creation, \cpp{expected<T,E>} is either a \cpp{T} or the root cause \cpp{E} that prevents its creation. The default type \cpp{E} would be \cpp{std::exception_ptr} as the exceptions seem to be the most used error-handling system. There is also some supports for the classes in the \cpp{<system_error>} header.
  \item \cpp{expected<T,E>} is default constructible.
- \item \cpp{expected<T,E>} is a monad (see [6]).
+ \item \cpp{expected<T,E>} is a monad (see \cite{MONAD}).
 \end{itemize}
 
-
 \section{Use cases}
+%%%%%%%%%%
 
 \subsection{Parse int}
+%%%%%%%%%%%
 
 \begin{lstlisting}
   expected<int> parseInt(const std::string& s) {
@@ -258,6 +262,7 @@ Next follows the parseInt function using a specific error.
 \end{lstlisting}
 
 \subsection{Parse int range}
+%%%%%%%%%%%%%%
 
 Given a function that parses an int and one that matches a string
 
@@ -427,6 +432,8 @@ std::pair<int,int> parseIntRange(iterator it) {
 
 
 \subsection{xxx}
+%%%%%%%%
+
 We should wonder what every programmers do when a function call returns an error:
 
 \begin{enumerate}
@@ -458,6 +465,7 @@ We imagine a scenario where:
 \end{itemize}
 
 \subsection{Exception-based expected}
+%%%%%%%%%%%%%%%%%%%%
 
 The code of the mock connect function is below. You can see that the errors are encapsulated into exceptions.
 \begin{lstlisting}
@@ -514,6 +522,7 @@ TODO INSERT CODE
 The next section shows how to do the same things with the standard error code (\cpp{std::error_condition}).
 
 \subsection{Error-based expected}
+%%%%%%%%%%%%%%%%%%
 
 We use the class \cpp{expected_or_error} which looks like the class expected without the exception.
 
@@ -536,6 +545,7 @@ TODO INSERT CODE
 We can see that the code is quite similar between both classes. It's mainly because we didn't use the exception facility of the expected class.
 
 \subsection{Result}
+%%%%%%%%%%
 
 The result of the both codes is the same 
 
@@ -544,19 +554,24 @@ TODO INSERT CODE
 \end{lstlisting}
 
 \section{Impacts on the Standard}
+%%%%%%%%%%%%%%%%%
 
 These changes are entirely based on library extensions and do not require any language features beyond what is available in C++ 14. It requires however the \cpp{in_place_t} from N3793.
 
 \section{Design rationale}
+%%%%%%%%%%%%%
 
 
 \subsection{Never-empty guaranty}
+%%%%%%%%%%%%%%%%%%
+
 As \cpp{boost::variant}, \cpp{expected<T,E>} ensures that it is never empty.
 All instances \cpp{v} of type \cpp{expected<T,E>} guarantee that \cpp{v} has constructed content of one of the types \cpp{T} or \cpp{E}, even if an operation on \cpp{v} has previously failed.
 
 This implies that expected may be viewed precisely as a union of exactly its bounded types. This "never-empty" property insulates the user from the possibility of undefined expected content and the significant additional complexity-of-use attendant with such a possibility.
 
 \subsection{\cpp{expected<T, E>} is default constructible if \cpp{T} is default constructible}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \cpp{expected<T,E>} should behave as much as possible as \cpp{T}. 
 
@@ -564,8 +579,168 @@ This implies that expected may be viewed precisely as a union of exactly its bou
 It is possible to make it default constructible adding an additional \cpp{init} \cpp{bool} member, but this is in some way equivalent to have \cpp{optional<expected<T,E>>}, so this proposal doesn't propose default constructor for any \cpp{T}.
 
 \subsection{Observers}
+%%%%%%%%%%%%
+
+
+\subsection{Monad}
+%%%%%%%%%%
+
+
+\section{Related work}
+%%%%%%%%%%%
+
+\subsection{Either monad and Variant}
+%%%%%%%%%%%%%%%%%%%%
+
+\cpp{expected<T,E>} can be seen as a specialization of a possible \cpp{either<T,E>} or \cpp{boost::variant<T,E>} which gives a specific intent to its first parameter, that is, it represent the type of the expected contained value. This specificity allows to provide a pointer like interface, as it is the case for \cpp{std::experimental::optional<T>}. Even if the standard contained a class \cpp{either<T,E>} or \cpp{variant<T,E>}, the interface provided by expected<T,E> is more specific and closer to what the user could expect as the result type of a function. In addition, \cpp{expected<T,E>} doesn't intend to be used to define recursive data as \cpp{boost::variant<>} does.
+
+\subsection{Optional}
+%%%%%%%%%%%
+
+We can see \cpp{expected<T,E>} as an optional that collapse all the values of \cpp{E} to \cpp{nullopt}. We can convert an \cpp{expected<T, E>} to an \cpp{optional<T>} with the possible loss of information.
+
+\begin{lstlisting}
+template <class T>
+optional<T> optionalCast(expected<T,E> v) {
+  if (v.valid()) return make_optional(*v);
+  else nullopt;
+}
+\end{lstlisting}
+
+We can convert an \cpp{optional<T>} to an \cpp{expected<T>} with the possible loss of the root cause.
+
+\begin{lstlisting}
+template <class T>
+expected<T> expectedCast(optional<T>) {
+  if (v.valid()) return make_expected(*v);
+  else expected<T>::from_exception();
+}
+\end{lstlisting}
+
+\subsection{Promise and Future}
+%%%%%%%%%%%%%%%%%
+
+We can see \cpp{expected<T>} as an immediate \cpp{future<T>}.
+While \cpp{promise<>}/\cpp{future<>} focuses on inter-thread asynchronous communication, \cpp{excepted<>} focus on eager and synchronous computations.
+We can move a ready \cpp{future<T>} to an \cpp{expected<T>} with no loss of information. At the end, the underlying type of \cpp{future<T>} could be \cpp{shared_ptr<expected<T>>}.
+
+\begin{lstlisting}
+template <class T>
+expected<T> expectedCast(future<T>&& f) {
+  assert (f.ready() && "future not ready");
+  if (f.has_exception()) 
+    return expected<T>::from_exception(getExceptionPtr(f)); // (1)
+  else 
+    return make_expected(f.get());
+}
+\end{lstlisting}
+
+Remark: in line (1) we could use instead \cpp{std::future<T>::get_exception_ptr()}, which is now provided by Boost.Thread, that can be implemented by the library more efficiently than the user could do.
+
+We can combine them as follows
+
+\begin{lstlisting}
+fut.then([](future<int> f) { return expectedCast(f).
+	then([](i){ ... }).recover(...);}
+\end{lstlisting}
+
+We can create also a \cpp{future<T>} from an \cpp{expected<T>}.
+
+\begin{lstlisting}
+template <class T>
+future<T> make_ready_future(expected<T>&& e) {
+  if (e.valid()) 
+    return make_ready_future(e.get();
+  else 
+    return make_exceptional_future(f.error()); // (2)
+}
+\end{lstlisting}
+
+Remark: line (2) uses Boost.Thread provides
+
+\begin{lstlisting}
+future<T> make_exceptional_future(exception_ptr ex);
+\end{lstlisting}
+
+
+\subsection{Expected monad}
+%%%%%%%%%%%%%%%
+
+As for the \cpp{future<T>} proposal, \cpp{expected<T,E>} provides also a way to visit the stored values.
+\cpp{future<T>} provides a \cpp{then()} function that accepts a continuation having the \cpp{future<T>} as parameter. The synchronous nature of expected makes it more appropriated to use two functions, one to manage with the case expected has a value and one to try to recover otherwise. This is more in line with the monad interface, as any function having a \cpp{T} as parameter can be used as parameter of the apply function, no need to have a \cpp{expected<T>}. This make it easier to reuse functions. 
+
+\begin{itemize}
+ \item \cpp{expected<T,E>::next()}/\cpp{expected<T,E>::recover()} are the counterpart of \cpp{future<T>.then()}
+ \item \cpp{expected<T,E>::unwrap()} is the counterpart of \cpp{future<T>.unwrap()}
+ \item \cpp{expected<T,E>::has_value()} is the counterpart of \cpp{future<T>.has_value()}
+ \item \cpp{expected<T,E>::has_exception()} is the counterpart of \cpp{future<T>.has_exception()}
+ \item \cpp{expected<T,E>::if_all()} and \cpp{expected<T,E>::if_any()} are the counterpart of \cpp{when_all()} and \cpp{when_any()}
+\end{itemize}
+
+\subsection{Comparison between optional, expected and future}
+
+The table \ref{comp-monads} presents a brief comparison between \cpp{optional<T>}, \cpp{expected<T>}  and \cpp{promise<T>/future<T>}.
+
+\begin{table}
+\bgroup
+\def\arraystretch{1.5}
+\begin{tabular}{|l|>{\raggedright\arraybackslash}p{4cm}|>{\raggedright\arraybackslash}p{4cm}|>{\raggedright\arraybackslash}p{4cm}|}
+\hline
+                    & \textbf{optional} & \textbf{expected} & \textbf{promise/future} \\
+\hline
+\textbf{null value} & yes & no & no \\
+\hline
+\textbf{relational operators} & yes & yes & no \\
+\hline
+\textbf{swap} & yes & yes & yes \\
+\hline
+\textbf{factories} & make_optional / nullopt & make_expected / make_expected_from_call / make_expected_from_exception & make_ready_future / (make_expected_from_exception, see \cite{MoreAsync}) \\
+\hline
+\textbf{hash} & yes & yes & yes \\
+\hline
+\textbf{value_type} & yes & yes & no / (yes, see \cite{MoreAsync}).  \\
+\hline
+\textbf{default constructor} & yes & yes (if T is default constructor) & yes \\
+\hline
+\textbf{allocators} & no & no & yes \\
+\hline
+\textbf{emplace} & yes & yes & no \\
+\hline
+\textbf{bool conversion} & valid & valid & no \\
+\hline
+\textbf{state} & valid (has_value) & valid / has_value & valid / ready / (has_value, see \cite{MoreAsync}) \\
+\hline
+\textbf{observers} & pointer-like / value & pointer-like / value / error & get / (get_exception_ptr, see \cite{MoreAsync}) \\
+\hline
+\textbf{member factories} & value_or & value_or & no (See \cite{MoreAsync}) \\
+\hline
+\textbf{continuations} & no & then/next/recover / if_all / if_any & then/ when_all / when_any / (next/recover see \cite{MoreAsync}) \\
+\hline
+\end{tabular}
+\egroup
+\caption{Comparison between optional, expected and promise/future.}
+\label{comp-monads}
+\end{table}
+
+
+
+\section{Open questions}
+%%%%%%%%%%%%%
+
+\subsection{Allocator support}
+%%%%%%%%%%%%%%%
+
+As \cpp{optional<T>},  \cpp{expected<T,E>} does not allocate memory. So it can do without allocators. However, it can be useful in compound types like:
+
+\begin{lstlisting}
+typedef vector< expected<vector<int, MyAlloc>>, MyAlloc>; MyVec;
+MyVec v{ v2, MyAlloc{} };
+\end{lstlisting}
+
+One could expect that the allocator argument is forwarded in this constructor call to the nested vectors that use the same allocator. Allocator support would enable this. \cpp{std::tuple} offers this functionality.
 
 \subsection{Which exception throw when when the user try to get the expected value but there is none?}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 It has been suggested to let the user decide the Exception, that would be throw when the user try to get the expected value but there is none, as third parameter. 
 
@@ -624,6 +799,7 @@ auto i = expct.get();  // std::system_error throw if not valid
 A class like this one could be added to the standard, but this proposal doesn't request it. 
 
 \subsection{About expected<T, ErrorCode, Exception>}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 It has been suggested also to extend the design into something that contains 
 
@@ -640,95 +816,9 @@ template <class T, class ErrorCode = none, class Exception = expected_default_ex
   struct expected;
 \end{lstlisting}
 
-
-
-\section{Related work}
-
-\subsection{Either monad and Variant}
-
-\cpp{expected<T,E>} can be seen as a specialization of a possible \cpp{either<T,E>} or \cpp{boost::variant<T,E>} which gives a specific intent to its first parameter, that is, it represent the type of the expected contained value. This specificity allows to provide a pointer like interface, as it is the case for \cpp{std::experimental::optional<T>}. Even if the standard contained a class \cpp{either<T,E>} or \cpp{variant<T,E>}, the interface provided by expected<T,E> is more specific and closer to what the user could expect as the result type of a function. In addition, \cpp{expected<T,E>} doesn't intend to be used to define recursive data as \cpp{boost::variant<>} does.
-
-\subsection{Optional}
-
-We can see \cpp{expected<T,E>} as an optional that collapse all the values of \cpp{E} to \cpp{nullopt}. We can convert an \cpp{expected<T, E>} to an \cpp{optional<T>} with the possible loss of information.
-
-\begin{lstlisting}
-template <class T>
-optional<T> optionalCast(expected<T,E> v) {
-  if (v.valid()) return make_optional(*v);
-  else nullopt;
-}
-\end{lstlisting}
-
-We can convert an \cpp{optional<T>} to an \cpp{expected<T>} with the possible loss of the root cause.
-
-\begin{lstlisting}
-template <class T>
-expected<T> expectedCast(optional<T>) {
-  if (v.valid()) return make_expected(*v);
-  else expected<T>::from_exception();
-}
-\end{lstlisting}
-
-\subsection{Promise and Future}
-
-We can see \cpp{expected<T>} as an immediate \cpp{future<T>}.
-While \cpp{promise<>}/\cpp{future<>} focuses on inter-thread asynchronous communication, \cpp{excepted<>} focus on eager and synchronous computations.
-We can move a ready \cpp{future<T>} to an \cpp{expected<T>} with no loss of information. At the end, the underlying type of \cpp{future<T>} could be \cpp{shared_ptr<expected<T>>}.
-
-\begin{lstlisting}
-template <class T>
-expected<T> expectedCast(future<T>&& f) {
-  assert (f.ready() && "future not ready");
-  if (f.has_exception()) 
-    return expected<T>::from_exception(getExceptionPtr(f)); // (1)
-  else 
-    return make_expected(f.get());
-}
-\end{lstlisting}
-
-Remark: in line (1) we could use instead \cpp{std::future<T>::get_exception_ptr()}, which is now provided by Boost.Thread, that can be implemented by the library more efficiently than the user could do.
-
-We can combine them as follows
-
-\begin{lstlisting}
-fut.then([](future<int> f) { return expectedCast(f).
-	then([](i){ ... }).recover(...);}
-\end{lstlisting}
-
-We can create also a \cpp{future<T>} from an \cpp{expected<T>}.
-
-\begin{lstlisting}
-template <class T>
-future<T> make_ready_future(expected<T>&& e) {
-  if (e.valid()) 
-    return make_ready_future(e.get();
-  else 
-    return make_exceptional_future(f.error()); // (2)
-}
-\end{lstlisting}
-
-Remark: line (2) uses Boost.Thread provides
-
-\begin{lstlisting}
-future<T> make_exceptional_future(exception_ptr ex);
-\end{lstlisting}
-
-
-\subsection{Expected monad}
-
-As for the \cpp{future<T>} proposal, \cpp{expected<T,E>} provides also a way to visit the stored values.
-\cpp{future<T>} provides a \cpp{then()} function that accepts a continuation having the \cpp{future<T>} as parameter. The synchronous nature of expected makes it more appropriated to use two functions, one to manage with the case expected has a value and one to try to recover otherwise. This is more in line with the monad interface, as any function having a \cpp{T} as parameter can be used as parameter of the apply function, no need to have a \cpp{expected<T>}. This make it easier to reuse functions. 
-
-\begin{itemize}
- \item \cpp{expected<T,E>::apply()}/\cpp{expected<T,E>::recover()} are the counterpart of \cpp{future<T>.then()}
- \item \cpp{expected<T,E>::unwrap()} is the counterpart of \cpp{future<T>.unwrap()}
- \item \cpp{expected<T,E>::has_value()} is the counterpart of \cpp{future<T>.has_value()}
- \item \cpp{expected<T,E>::has_exception()} is the counterpart of \cpp{future<T>.has_exception()}
- \item \cpp{expected<T,E>::if_all()} and \cpp{expected<T,E>::if_any()} are the counterpart of \cpp{when_all()} and \cpp{when_any()}
-\end{itemize}
-
 \section{Proposed Wording}
+%%%%%%%%%%%%%%
+
 
 The proposed changes have been modified to be expressed as edits to N3797, the C++ Draft Standard \cite{Cppdraft}. The wording has been adapted from N3797 \cite{OptionalRev5}.
 \newline
