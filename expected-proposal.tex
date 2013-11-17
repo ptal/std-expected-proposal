@@ -1420,6 +1420,78 @@ calls \cpp{x.swap(y)}.
 
 \wordingSubSec{Factories}{expected.factories}
 
+% make_expected move value factory.
+\begin{lstlisting}[xleftmargin=0pt]
+template <class T>
+constexpr expected<typename decay<T>::type> make_expected(T&& v);
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Returns}
+\cpp{expected<typename decay<T>::type>(std::forward<T>(v))}.
+\end{wordingTextItem}
+\end{wordingPara}
+
+% make_expected factory.
+\begin{lstlisting}[xleftmargin=0pt]
+template <>
+constexpr expected<void> make_expected(); 
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Returns}
+\cpp{expected<void>(in_place)}.
+\end{wordingTextItem}
+\end{wordingPara}
+
+% make_expected_from_exception factory.
+\begin{lstlisting}[xleftmargin=0pt]
+template <class T>
+constexpr expected<T> make_expected_from_exception(std::exception_ptr v); 
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Returns}
+\cpp{expected<T>(exceptional, std::forward<E>(v))}.
+\end{wordingTextItem}
+\end{wordingPara}
+
+% make_expected_from_exception factory.
+\begin{lstlisting}[xleftmargin=0pt]
+template <class T, class E>
+constexpr expected<T> make_expected_from_exception(E&& v);
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Returns}
+Equivalent to:
+\begin{lstlisting}
+if(typeid(e)!=typeid(E)){
+  throw invalid_argument( "slicing detected");
+}
+return make_expected_from_exception<T>(make_exception_ptr(v));
+\end{lstlisting}
+\end{wordingTextItem}
+\end{wordingPara}
+
+
+% make_expected_from_exception factory (flying exception).
+\begin{lstlisting}[xleftmargin=0pt]
+template <class T>
+constexpr expected<T> make_expected_from_exception(); 
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Returns}
+\cpp{make_expected_from_exception<T>(std::current_exception())}
+\end{wordingTextItem}
+\end{wordingPara}
+
+% make_expected_from_call
+\begin{lstlisting}[xleftmargin=0pt]
+template <class F>
+constexpr typename expected<result_type<F>::type make_expected_from_call(F f);
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Returns}
+\end{wordingTextItem}
+\end{wordingPara}
+
 \wordingSubSec{Hash support}{expected.hash}
 
 \section{Implementability}
