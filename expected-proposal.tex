@@ -1210,6 +1210,36 @@ The function shall not participate in overload resolution unless: \\
 
 \wordingSubSubSec{Swap}{expected.object.swap}
 
+% swap operation.
+\begin{lstlisting}[xleftmargin=0pt]
+void expected<T, E>::swap(expected<T, E>& rhs) noexcept(/*see below*/); 
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Requires}
+LValues of type \cpp{T} shall be swappable, \cpp{is_move_constructible<T>::value == true}, LValues of type \cpp{E} shall be swappable and \cpp{is_move_constructible<T>::value == true}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Effects}
+if \cpp{*this} is valued and \cpp{rhs} is exceptional, initializes the contained value of \cpp{rhs} by direct-initialization with \cpp{std::move(*(*this))}, followed by \cpp{val->T::~T()}, \cpp{swap(init, rhs.init)}, otherwise \\
+if \cpp{*this} is disengaged and \cpp{rhs} is engaged, initializes the contained value of \cpp{*this} by direct-initialization with \cpp{std::move(*rhs)}, followed by \cpp{rhs.val->T::~T()}, \cpp{swap(init, rhs.init)}, otherwise \\
+if both \cpp{*this} and \cpp{rhs} are engaged) calls \cpp{swap(*(*this), *rhs)}. 
+\end{wordingTextItem}
+\begin{wordingTextItem}{Returns}
+\end{wordingTextItem}
+\begin{wordingTextItem}{Postconditions}
+\end{wordingTextItem}
+\begin{wordingTextItem}{Exception Safety}
+If any exception is thrown, values of \cpp{init} and \cpp{rhs.init} remain unchanged. If an exception is thrown during the call to function swap the state of \cpp{*val} and \cpp{*rhs.val} is determined by the exception safety guarantee of swap for lvalues of \cpp{T}. If an exception is thrown during the call to \cpp{T}'s move constructor, the state of \cpp{*val} and \cpp{*rhs.val} is determined by the exception safety guarantee of \cpp{T}'s move constructor.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Throws}
+Any exceptions that the expressions in the Effects clause throw.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+The expression inside \cpp{noexcept} is equivalent to: \\
+\cpp{is_nothrow_move_constructible<T>::value && noexcept(swap(declval<T&>(), declval<T&>())) &&} \\
+\cpp{is_nothrow_move_constructible<E>::value && noexcept(swap(declval<E&>(), declval<E&>()))}.
+\end{wordingTextItem}
+\end{wordingPara}
+
 \wordingSubSubSec{Observers}{expected.object.observe}
 
 \wordingSubSec{Exceptional construction}{expected.exceptional}
