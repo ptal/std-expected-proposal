@@ -1042,6 +1042,19 @@ If \cpp{T}'s constructor selected for the initialization is a \cpp{constexpr} co
 
 \wordingSubSubSec{Destructor}{expected.object.dtor}
 
+\begin{lstlisting}[xleftmargin=0pt]
+expected<T, E>::~expected();
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Effects}
+If \cpp{is_trivially_destructible<T>::value != true} and \cpp{*this} is valued, calls \cpp{val->T::~T()}.\\
+If \cpp{is_trivially_destructible<E>::value != true} and \cpp{*this} is exceptional, calls \cpp{error->E::~E()}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+If \cpp{is_trivially_destructible<T>::value == true} and \cpp{is_trivially_destructible<E>::value == true} then this destructor shall be a trivial destructor.
+\end{wordingTextItem}
+\end{wordingPara}
+
 \wordingSubSubSec{Assignment}{expected.object.assign}
 
 \wordingSubSubSec{Swap}{expected.object.swap}
