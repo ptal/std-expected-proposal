@@ -261,85 +261,145 @@ Next follows the parseInt function using a specific error.
   }
 \end{lstlisting}
 
-\subsection{Parse int range}
+\subsection{Getting an int range}
 %%%%%%%%%%%%%%
 
-Given a function that parses an int and one that matches a string
+The next use case show how expected scales and compose. 
+
+Given a function that gets an int and one that matches a string, how to define a function that parses an int range"<int>..<int>"
+
+Next follows the Standard IO facet style to get an int from a stream (only the iterators are show)
 
 \begin{lstlisting}
-expected<int> parseInt(iterator&);
-expected<void> matchesString(std::string, iterator&);
+template <typename InputIterator>
+  InputIterator getInt(InputIterator s, InputIterator end, error& err, int& t);
 \end{lstlisting}
 
-how to define a function that parses an int range"<int>..<int>"
+In addition to manage with the Iterators, the function changes the error and the int value itself. Let me start by defining the function as if the functions throw an exception when the. Moving to a pure functional style gives.
 
 \begin{lstlisting}
-expected<std::pair<int,int>> parseIntRange(iterator& it);
+template <typename InputIterator>
+  pair<InputIterator, int> getInt(InputIterator s, InputIterator end);
+template <typename InputIterator>
+  pair<InputIterator, bool> matches(string, InputIterator s, InputIterator end);
 \end{lstlisting}
 
-
-Let me start by defining the function as if the functions throw an exception
+The get int range could be defined as
 
 \begin{lstlisting}
-std::pair<int,int> parseIntRange(iterator it) {
-    auto f = parseInt(it);
-    auto m = matchesString(":", it).
-    auto l = parseInt(it);       
-    return make_pair(f, l);
+template <class InputIterator>
+  pair<InputIterator, pair<int,int>> getIntRange(InputIterator& s, InputIterator e) {
+    auto f = getInt(s,e);
+    auto m = matchesString(":", f.first, e).
+    auto l = getInt(m.first,e);       
+    return make_pair(l.first, make_pair(f.second, l.second));
 }
 \end{lstlisting}
+
+Clearly this is quite clean. However, 
+
+Moving to a pure functional style with expected is possible.
+This is the role of expected. The signature of getInt, in a pure functional world,  could be either
+
+\begin{lstlisting}
+template <class InputIterator, class Num>
+  pair<InputIterator, expected<int, errc> get(InputIterator s, InputIterator e);
+\end{lstlisting}
+
+or 
+
+\begin{lstlisting}
+template <class InputIterator, class Num>
+  expected<pair<InputIterator, int>, pair<InputIterator, errc> > get(InputIterator s, InputIterator e);
+\end{lstlisting}
+
+
+
+
+Next we will analyze both possibilities and conclude which approach is better adapted.
+
+\subsubsection{Returning pair}
+
+So given the following prototypes:
+
+\begin{lstlisting}
+template <class InputIterator>
+  pair<InputIterator, expected<int>> getInt(InputIterator& s, InputIterator e);
+template <class InputIterator>
+  pair<InputIterator, expected<void>> matchesString(std::string, InputIterator& s, InputIterator e);
+\end{lstlisting}
+
+how to define a function
+
+\begin{lstlisting}
+template <class InputIterator>
+  pair<InputIterator, expected<pair<int,int>>> getIntRange(InputIterator& s, InputIterator e);
+\end{lstlisting}
+
 
 One solution consists to check if there is an error at every step. 
 
 \begin{lstlisting}
-expected<std::pair<int,int>> parseIntRange(iterator it) {
-    auto f = parseInt(it);
-    if (! f.valid())  return expected<std::pair<int,int>>::from_exception(f.error());
-    auto m = matchesString(":", it).
-    if (! m.valid())  return expected<std::pair<int,int>>::from_exception(m.error());
-    auto l = parseInt(it);
-    if (! l.valid())   return expected<std::pair<int,int>>::from_exception(l.error());
+template <class InputIterator>
+  pair<InputIterator, expected<pair<int,int>>> 
+  getIntRange(InputIterator& s, InputIterator e) {
+    auto f = getInt(s, e);
+    if (! f.second.valid())  
+        return make_pair(f.first, expected<pair<int,int>>::from_error(f.error()));
+    auto m = matchesString(":", s, e).
+    if (! m.valid())  
+        return make_pair(m.first, expected<pair<int,int>>::from_error(m.error()));
+    auto l = getInt(s, e);
+    if (! l.valid())   
+        return make_pair(l.first, expected<pair<int,int>>::from_error(l.error()));
         
-    return make_expected(make_pair(f.get(), l.get()));
+    return make_pair(l.first, make_expected(make_pair(f.get(), l.get())));
 }
 \end{lstlisting}
 
 Another consists in checking if we can continue at each step
 
 \begin{lstlisting}
-expected<std::pair<int,int>> parseIntRange(iterator it) {
-    auto f = parseInt(it);
+template <class InputIterator>
+  pair<InputIterator, expected<pair<int,int>>> getIntRange(InputIterator& s, InputIterator e) {
+    auto f = getInt(s, e);
+    InputIterator r = f.first;
     if ( f.valid())  {
-        auto m = parse(":", it).
+        auto m = matchesString(":", s, e).
+        r = m.first;
         if (m.valid())  {
-            auto l = parseInt(it);
-            if (l.valid())  return make_expected(make_pair(f.get(), l.get()));
+            auto l = getInt(s, e);
+            r = l.first;
+            if (l.valid())  
+                return make_pair(r, make_expected(make_pair(f.get(), l.get())));
         }
     }        
-    return expected<std::pair<int,int>>::from_exception(l.error());
+    return make_pair(r, expected<pair<int,int>>::from_error(l.error()));
 }
 \end{lstlisting}
 
 The preceding approaches contains too much noise respect to the exception based solution. An alternative consists in folding the result and use a continuation passing style. 
 
 \begin{lstlisting}
-expected<std::pair<int,int>> parseIntRange(iterator it) {
-    return                           parseInt(it). 
-    		next([&it](int f) {  fold(f, matchesString("..", it)); }). 
-    		next([&it](int f) {  fold(f, parseInt(it)); });
+template <class InputIterator>
+  pair<InputIterator, expected<pair<int,int>>> getIntRange(InputIterator& s, InputIterator e) {
+    return                           getInt(s, e). 
+    		next([](int f) {  fold(f, matchesString("..", s, e)); }). 
+    		next([&it](int f) {  fold(f, getInt(s, e)); });
 }
 \end{lstlisting}
 
-Note that the control flow has disapered but the calls have been wrapped on some esoteric lambda. Let me analyze what is behind the scenes
+Note that the control flow has disappeared but the calls have been wrapped on some esoteric lambda. Let me analyze what is behind the scenes
 
 \begin{lstlisting}
-expected<std::pair<int,int>> parseIntRange(iterator it) {
-    return parseInt(it). // [1]
+template <class InputIterator>
+  expected<pair<int,int>> getIntRange(InputIterator s, InputIterator e) {
+    return getInt(s, e). // [1]
     next([&it](int f) { //[2]
-        return fold(f, matchesString("..", it)); // [3]
+        return pair_fold(f, matchesString("..", s, e)); // [3]
     }). 
     next([&it](int f) { // [4]
-        return fold(f, parseInt(it)); // [5]
+        return pair_fold(f, getInt(s, e)); // [5]
     });
 }
 \end{lstlisting}
@@ -347,27 +407,27 @@ expected<std::pair<int,int>> parseIntRange(iterator it) {
 Line 1: obtains an expected<int> possibly with the parsed int. 
 Line 2: the call to next() will return an expect<int> as the lambda returns an expect<int>. This is due to the fact that next unwraps the result so that expect<expect<int>> is unwrapped to expect<int>. 
 If it is valid it calls to the lambda and unwraps the result. It it it invalid, it returns an expect<int> with the obtained error.
-Line 3: returns an expected that combines first and the success of the call to  matchesString("..", it).
-Line4:  the call to next() will return an expect<std::pair<int,int>> as the lambda returns an expect<std::pair<int,int>>. This is due to the fact that next unwraps the result so that expect<expect<std::pair<int,int>>> is unwrapped to expect<std::pair<int,int>>. 
-If it is valid it calls to the lambda and unwraps the result. It it is invalid, it returns an expect<std::pair<int,int>> with the obtained error.
-Line 5: returns an expected that combines first and the success of the call to  parseInt(it).
+Line 3: returns an expected that combines first and the success of the call to  matchesString("..", s, e).
+Line4:  the call to next() will return an expect<pair<int,int>> as the lambda returns an expect<pair<int,int>>. This is due to the fact that next unwraps the result so that expect<expect<pair<int,int>>> is unwrapped to expect<pair<int,int>>. 
+If it is valid it calls to the lambda and unwraps the result. It it is invalid, it returns an expect<pair<int,int>> with the obtained error.
+Line 5: returns an expected that combines first and the success of the call to  getInt(s, e).
 
-Next follows the fold function
+Next follows the pair_fold function
 
 \begin{lstlisting}
 
 template<class T, class F>
-//requires ! is_void<result_of_t<F()>>::value
-expected<std::pair<T, result_of_t<F()>> fold(T first, F f);
+  //requires ! is_void<result_of_t<F()>>::value
+  expected<pair<T, result_of_t<F()>> pair_fold(T first, F f);
 
 template<class T, class F>
-//requires is_void<result_of_t<F()>>::value
-expected<T> fold(T first, F f) {
+  //requires is_void<result_of_t<F()>>::value
+  expected<T> pair_fold(T first, F f) {
 \end{lstlisting}
 
 When F() returns expected<void>, the following function will return an expected<T> . It contents depends on the result of the call to f. if the expected result is valid it return an expected with the first argument, otherwise, an expected with the error of the result of the fall to f.  
 
-When F() returns expected<U>, the following function will return an expected<std::pair<T,U>> . It contents depends on the result of the call to f. if the expected result is valid it return an expected with a pair of its first argument and the value of  the result of the call to f , otherwise, an expected with the error of the result of the fall to f.  
+When F() returns expected<U>, the following function will return an expected<pair<T,U>> . It contents depends on the result of the call to f. if the expected result is valid it return an expected with a pair of its first argument and the value of  the result of the call to f , otherwise, an expected with the error of the result of the fall to f.  
 
 This function is useful to store the result of several computations.
 
@@ -375,22 +435,22 @@ This function is useful to store the result of several computations.
 
 template<class T, class F>
 //requires ! is_void<result_of_t<F()>>::value
-expected<std::pair<T, result_of_t<F()>> fold(T first, F f) {
+expected<pair<T, result_of_t<F()>> pair_fold(T first, F f) {
     auto second = f();
     if (second.valid())
         return make_expected(make_pair(first, *second));
     } else  {
-        return expected<std::pair<T,int>>::from_exception(second.error());
+        return expected<pair<T,int>>::from_error(second.error());
     }
 }
 template<class T, class F>
-//requires is_void<result_of_t<F()>>::value
-expected<T> fold(T first, F f) {
+  //requires is_void<result_of_t<F()>>::value
+  expected<T> pair_fold(T first, F f) {
     auto second = f();
     if (second.valid())
         return make_expected(first);
     } else  {
-        return expected<std::pair<T,int>>::from_exception(second.error());
+        return expected<pair<T,int>>::from_error(second.error());
     }
 }
 \end{lstlisting}
@@ -398,23 +458,26 @@ expected<T> fold(T first, F f) {
 Yet another alternative (even if it is not adapted to this example) could be to calculate all the expected and if all are valid return the expected result.
 
 \begin{lstlisting}
-expected<std::pair<int,int>> parseIntRange(iterator it) {
-    auto f = parseInt(it);
-    auto m = parse(":", it).
-    auto l = parseInt(it);
+template <class InputIterator>
+  expected<pair<int,int>> getIntRange(InputIterator& s, InputIterator e) {
+    auto f = getInt(s, e);
+    auto m = parse(":", s, e).
+    auto l = getInt(s, e);
     auto all = if_all(f,m,l);
     if (all.valid()) return make_expected(make_pair(all.get()));
-    return expected<std::pair<int,int>>::from_exception(all.error());
+    return expected<pair<int,int>>::from_error(all.error());
+    //return make_expected_from_error<pair<int,int>>(all.error());
 }
 \end{lstlisting}
 
-Let see how the function looks like if it return a tuple.
+Let see how the function could looks like if it returned a tuple.
 
 \begin{lstlisting}
-expected<std::tuple<int,int>> parseIntRange(iterator it) {
-    auto f = parseInt(it);
-    auto m = parse(":", it).
-    auto l = parseInt(it);
+template <class InputIterator>
+expected<std::tuple<int,int>> getIntRange(InputIterator& s, InputIterator e) {
+    auto f = getInt(s, e);
+    auto m = parse(":", s, e).
+    auto l = getInt(s, e);
     return if_all(f, m, l);
 }
 \end{lstlisting}
@@ -422,13 +485,17 @@ expected<std::tuple<int,int>> parseIntRange(iterator it) {
 Note that this is very close to the exception based solution
 
 \begin{lstlisting}
-std::pair<int,int> parseIntRange(iterator it) {
-    auto f = parseInt(it);
-    auto m = matchesString(":", it).
-    auto l = parseInt(it);       
+template <class InputIterator>
+pair<int,int> getIntRange(InputIterator& s, InputIterator e) {
+    auto f = getInt(s, e);
+    auto m = matchesString(":", s, e).
+    auto l = getInt(s, e);       
     return make_pair(f, l);
 }
 \end{lstlisting}
+
+\subsubsection{Returning expected}
+
 
 
 \subsection{xxx}
@@ -474,11 +541,14 @@ expected<int> mock_connect(
     const std::string& passwd, 
     bool timed_out) {
   if(passwd != "passwd")
-      return expected<int>::from_exception(connection_refused());
+      return expected<int>::from_error(connection_refused());
+      //return make_expected_from_error<int>(connection_refused());
   else if(hostname != "localhost")
-      return expected<int>::from_exception(host_unreachable());
+      return expected<int>::from_error(host_unreachable());
+      //return make_expected_from_error<int>(host_unreachable());
   else if(timed_out)
-      return expected<int>::from_exception(timeout());
+      return expected<int>::from_error(timeout());
+      return make_expected_from_error<int>(timeout());
   return expected<int>(0);
 }
 \end{lstlisting}
@@ -613,7 +683,7 @@ We can convert an \cpp{optional<T>} to an \cpp{expected<T>} with the possible lo
 template <class T>
 expected<T> expectedCast(optional<T>) {
   if (v.valid()) return make_expected(*v);
-  else expected<T>::from_exception();
+  else expected<T>::from_error();
 }
 \end{lstlisting}
 
@@ -628,8 +698,8 @@ We can move a ready \cpp{future<T>} to an \cpp{expected<T>} with no loss of info
 template <class T>
 expected<T> expectedCast(future<T>&& f) {
   assert (f.ready() && "future not ready");
-  if (f.has_exception()) 
-    return expected<T>::from_exception(getExceptionPtr(f)); // (1)
+  if (! f.valid()) 
+    return expected<T>::from_error(getExceptionPtr(f)); // (1)
   else 
     return make_expected(f.get());
 }
@@ -673,7 +743,6 @@ As for the \cpp{future<T>} proposal, \cpp{expected<T,E>} provides also a way to 
  \item \cpp{expected<T,E>::next()}/\cpp{expected<T,E>::recover()} are the counterpart of \cpp{future<T>.then()}
  \item \cpp{expected<T,E>::unwrap()} is the counterpart of \cpp{future<T>.unwrap()}
  \item \cpp{expected<T,E>::has_value()} is the counterpart of \cpp{future<T>.has_value()}
- \item \cpp{expected<T,E>::has_exception()} is the counterpart of \cpp{future<T>.has_exception()}
  \item \cpp{expected<T,E>::if_all()} and \cpp{expected<T,E>::if_any()} are the counterpart of \cpp{when_all()} and \cpp{when_any()}
 \end{itemize}
 
@@ -694,7 +763,7 @@ The table \ref{comp-monads} presents a brief comparison between \cpp{optional<T>
 \hline
 \textbf{swap} & yes & yes & yes \\
 \hline
-\textbf{factories} & make_optional / nullopt & make_expected / make_expected_from_call / make_expected_from_exception & make_ready_future / (make_expected_from_exception, see \cite{MoreAsync}) \\
+\textbf{factories} & make_optional / nullopt & make_expected / make_expected_from_call / make_expected_from_error & make_ready_future / (make_expected_from_error, see \cite{MoreAsync}) \\
 \hline
 \textbf{hash} & yes & yes & yes \\
 \hline
@@ -890,11 +959,11 @@ namespace std {namespace experimental {
   template <class T> constexpr expected<see below> make_expected(T&&);
   template <> constexpr expected<void> make_expected(); 
   template <class T>
-   constexpr expected<T> make_expected_from_exception(std::exception_ptr v); 
+   constexpr expected<T> make_expected_from_error(std::exception_ptr v); 
   template <class T, class E>
-   constexpr expected<T> make_expected_from_exception(E&& v);
+   constexpr expected<T> make_expected_from_error(E&& v);
   template <class T>
-   constexpr expected<T> make_expected_from_exception(); 
+   constexpr expected<T> make_expected_from_error(); 
   template <class F>
    constexpr typename expected<typename result_type<F>::type
    make_expected_from_call(F f);
