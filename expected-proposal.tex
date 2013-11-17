@@ -895,6 +895,7 @@ Members valued, val and except are provided for exposition only. Implementations
 
 \wordingSubSubSec{Constructors}{expected.object.ctor}
 
+% Copy Constructor
 \begin{lstlisting}[xleftmargin=0pt]
 expected<T, E>::expected(const expected<T, E>& rhs);
 \end{lstlisting}
@@ -908,16 +909,15 @@ If \cpp{rhs} is valued initializes the contained value as if direct-non-list-ini
 \noindent
 If \cpp{rhs} is exceptional initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with the expression \cpp{rhs.error()}.
 \end{wordingTextItem}
-
 \begin{wordingTextItem}{Postconditions}
 \cpp{bool(rhs) == bool(*this)}.
 \end{wordingTextItem}
-
 \begin{wordingTextItem}{Throws}
 Any exception thrown by the selected constructor of \cpp{T} or \cpp{E}.
 \end{wordingTextItem}
 \end{wordingPara}
 
+% Move Constructor
 \begin{lstlisting}[xleftmargin=0pt]
 expected<T, E>::expected(expected<T, E> && rhs) noexcept(/*see below*/);
 \end{lstlisting}
@@ -932,21 +932,113 @@ If \cpp{rhs} is valued initializes the contained value as if direct-non-list-ini
 \noindent
 If \cpp{rhs} is exceptional initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with the expression \cpp{std::move(rhs.error())}. \cpp{bool(rhs)} is unchanged.
 \end{wordingTextItem}
-
 \begin{wordingTextItem}{Postconditions}
 \cpp{bool(rhs) == bool(*this)}.
 \end{wordingTextItem}
-
 \begin{wordingTextItem}{Throws}
 Any exception thrown by the selected constructor of \cpp{T} or \cpp{E}.
 \end{wordingTextItem}
-
 \begin{wordingTextItem}{Remarks}
 The expression inside \cpp{noexcept} is equivalent to:\\
 \cpp{is_nothrow_move_constructible<T>::value && is_nothrow_move_constructible<E>::value}.
 \end{wordingTextItem}
 \end{wordingPara}
 
+% Value Constructor
+\begin{lstlisting}[xleftmargin=0pt]
+constexpr expected<T, E>::expected(const T& v);
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Requires}
+\cpp{is_copy_constructible<T>::value == true} and\\
+\cpp{is_copy_constructible<E>::value == true}
+\end{wordingTextItem}
+\begin{wordingTextItem}{Effects}
+Initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the expression \cpp{v}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Postconditions}
+\cpp{*this} is valued.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Throws}
+Any exception thrown by the selected constructor of \cpp{T}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+If \cpp{T}'s selected constructor is a \cpp{constexpr} constructor, this constructor shall be a \cpp{constexpr} constructor.
+\end{wordingTextItem}
+\end{wordingPara}
+
+% Move value constructor
+\begin{lstlisting}[xleftmargin=0pt]
+constexpr expected<T, E>::expected(T&& v); 
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Requires}
+\cpp{is_move_constructible<T>::value == true}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Effects}
+Initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the expression \cpp{std::move(v)}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Postconditions}
+\cpp{*this} is valued.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Throws}
+Any exception thrown by the selected constructor of \cpp{T}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+If \cpp{T}'s selected constructor is a \cpp{constexpr} constructor, this constructor shall be a \cpp{constexpr} constructor.
+\end{wordingTextItem}
+\end{wordingPara}
+
+% Emplace constructor
+\begin{lstlisting}[xleftmargin=0pt]
+template <class... Args>
+constexpr explicit expected(in_place_t, Args&&... args); 
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Requires}
+\cpp{is_constructible<T, Args&&...>::value == true}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Effects}
+Initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the arguments \cpp{std::forward<Args>(args)...}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Postconditions}
+\cpp{*this} is valued.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Throws}
+Any exception thrown by the selected constructor of \cpp{T}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+If \cpp{T}'s constructor selected for the initialization is a \cpp{constexpr} constructor, this constructor shall be a \cpp{constexpr} constructor.
+\end{wordingTextItem}
+\end{wordingPara}
+
+% Emplace constructor with initializer list.
+\begin{lstlisting}[xleftmargin=0pt]
+template <class U, class... Args>
+constexpr explicit expected(in_place_t, initializer_list<U> il, Args&&... args); 
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Requires}
+\cpp{is_constructible<T, initializer_list<U>&, Args&&...>::value == true}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Effects}
+Initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the arguments \cpp{il, std::forward<Args>(args)...}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Postconditions}
+\cpp{*this} is valued.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Throws}
+Any exception thrown by the selected constructor of \cpp{T}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+The function shall not participate in overload resolution unless:\\
+\noindent
+\cpp{is_constructible<T, initializer_list<U>&, Args&&...>::value == true}.\\
+
+\noindent
+If \cpp{T}'s constructor selected for the initialization is a \cpp{constexpr} constructor, this constructor shall be a \cpp{constexpr} constructor.
+\end{wordingTextItem}
+\end{wordingPara}
 
 \wordingSubSubSec{Destructor}{expected.object.dtor}
 
