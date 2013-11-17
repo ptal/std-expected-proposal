@@ -1242,6 +1242,115 @@ The expression inside \cpp{noexcept} is equivalent to: \\
 
 \wordingSubSubSec{Observers}{expected.object.observe}
 
+% -> operator.
+\begin{lstlisting}[xleftmargin=0pt]
+constexpr T const* expected<T, E>::operator->() const;
+T* expected<T, E>::operator->(); 
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Requires}
+\cpp{*this} is valued.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Returns}
+\cpp{val}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+Unless \cpp{T} is a user-defined type with overloaded unary operator\&, the first function shall be a \cpp{constexpr} function.
+\end{wordingTextItem}
+\end{wordingPara}
+
+% * operator.
+\begin{lstlisting}[xleftmargin=0pt]
+constexpr T const& expected<T, E>::operator*() const;
+T& expected<T, E>::operator*(); 
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Requires}
+\cpp{*this} is valued.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Returns}
+\cpp{*val}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+The first function shall be a \cpp{constexpr} function.
+\end{wordingTextItem}
+\end{wordingPara}
+
+% bool convertion operator.
+\begin{lstlisting}[xleftmargin=0pt]
+constexpr explicit expected<T, E>::operator bool() noexcept; 
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Returns}
+\cpp{valued}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+This function shall be a \cpp{constexpr} function.
+\end{wordingTextItem}
+\end{wordingPara}
+
+% value accessor.
+\begin{lstlisting}[xleftmargin=0pt]
+constexpr T const& expected<T, E>::value() const;
+T& expected<T, E>::value(); 
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Returns}
+\cpp{*val}, \cpp{if bool(*this)}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Throws}
+\cpp{bad_expected_access if !*this}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+The first function shall be a \cpp{constexpr} function.
+\end{wordingTextItem}
+\end{wordingPara}
+
+% value_or method.
+\begin{lstlisting}[xleftmargin=0pt]
+template <class U>
+constexpr T expected<T, E>::value_or(U&& v) const&; 
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Requires}
+\cpp{is_copy_constructible<T>::value == true} and \\
+\cpp{is_convertible<U&&, T>::value == true}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Returns}
+\cpp{bool(*this) ? **this : static_cast<T>(std::forward<U>(v))}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Exception Safety}
+If \cpp{init == true} and exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{init} and \cpp{v} remains unchanged and the state of \cpp{*val} is determined by the exception safety guarantee of the selected constructor of \cpp{T}. Otherwise, when exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{*this} remains unchanged and the state of \cpp{v} is determined by the exception safety guarantee of the selected constructor of \cpp{T}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Throws}
+Any exception thrown by the selected constructor of \cpp{T}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+If both constructors of \cpp{T} which could be selected are \cpp{constexpr} constructors, this function shall be a \cpp{constexpr} function.
+\end{wordingTextItem}
+\end{wordingPara}
+
+% move value_or.
+\begin{lstlisting}[xleftmargin=0pt]
+template <class U>
+T expected<T, E>::value_or(U&& v) &&; 
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Requires}
+\cpp{is_move_constructible<T>::value == true} and \\
+\cpp{is_convertible<U&&, T>::value == true}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Returns}
+\cpp{bool(*this) ? std::move(**this) : static_cast<T>(std::forward<U>(v))}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Exception Safety}
+If \cpp{init == true} and exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{init} and \cpp{v} remains unchanged and the state of \cpp{*val} is determined by the exception safety guarantee of the \cpp{T}'s constructor. Otherwise, when exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{*this} remains unchanged and the state of \cpp{v} is determined by the exception safety guarantee of the selected constructor of \cpp{T}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Throws}
+Any exception thrown by the selected constructor of \cpp{T}.
+\end{wordingTextItem}
+\end{wordingPara}
+
 \wordingSubSec{Exceptional construction}{expected.exceptional}
 
 \begin{lstlisting}
