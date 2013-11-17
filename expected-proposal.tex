@@ -1364,6 +1364,43 @@ The \cpp{struct exceptional_t} is an empty structure type used as a unique type 
 
 \wordingSubSec{Class bad_expected_access}{expected.bad_expected_access}
 
+\begin{lstlisting}
+namespace std {
+  class bad_expected_access : public logic_error {
+  public:
+    explicit bad_expected_access(const string& what_arg);
+    explicit bad_expected_access(const char* what_arg);
+  };
+}
+\end{lstlisting}
+The class \cpp{bad_expected_access} defines the type of objects thrown as exceptions to report the situation where an attempt is made to access the value of a exceptional expected object.
+
+% constructor with string message.
+\begin{lstlisting}[xleftmargin=0pt]
+bad_expected_access(const string& what_arg); 
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Effects}
+Constructs an object of class \cpp{bad_expected_access}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Postconditions}
+\cpp{strcmp(what(), what_arg.c_str()) == 0}.
+\end{wordingTextItem}
+\end{wordingPara}
+
+% constructor with char* message.
+\begin{lstlisting}[xleftmargin=0pt]
+bad_expected_access(const char* what_arg); 
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Effects}
+Constructs an object of class \cpp{bad_expected_access}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Postconditions}
+\cpp{strcmp(what(), what_arg) == 0}.
+\end{wordingTextItem}
+\end{wordingPara}
+
 \wordingSubSec{Relational operators}{expected.relational_op}
 
 \wordingSubSec{Comparison with T}{expected.comparison_T}
