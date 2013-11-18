@@ -92,7 +92,7 @@
 }
 
 \setlength{\droptitle}{10em}
-\title{A proposal to add a utility class to represent expected objects}
+\title{A proposal to add a utility class to represent expected monads}
 \author{}
 \date{}
 
@@ -157,7 +157,7 @@ The first and the third characteristic are quite contradictory. The former point
 \label{comp-handling-error}
 \end{table}
 
-\section{Alexandrescu Expected class}
+\subsection{Alexandrescu Expected class}
 %%%%%%%%%%%%%%%%%%%%
 
 We can do the same analysis for the \cpp{Expected<T>} class from Alexandrescu talk \cite{AlexandrescuExpected}:
@@ -186,14 +186,15 @@ Other characteristics of \cpp{Expected<T>}:
 \end{itemize}
 
 \noindent
-However \cpp{Expected<T>} class also has some drawbacks:
+However \cpp{Expected<T>} class also has some minor limitations:
 \begin{itemize}
  \item The error code must be an exception.
  \item It doesn't provide a better solution to resolve errors. You can throw or use the \cpp{hasException<E>()} function to test errors which is similar to the old switch case statement.
  \item The function \cpp{hasException<E>()} test the type and so cannot distinguish two different errors from the same exception. Exception can contains multiple error case scenarios (think about \cpp{std::invalid_argument}).
 \end{itemize}
 
-\noindent
+\subsection{Differences between the proposed expected class and Alexandrescu Expected class}
+
 The main enhancements or differences of the proposed \cpp{expected<T,E>} respect to \cpp{Expected<T>} are:
 \begin{itemize}
  \item \cpp{expected<T,E>} parameterizes the root cause that prevents its creation, \cpp{expected<T,E>} is either a \cpp{T} or the root cause \cpp{E} that prevents its creation. The default type \cpp{E} would be \cpp{std::exception_ptr} as the exceptions seem to be the most used error-handling system. There is also some supports for the classes in the \cpp{<system_error>} header.
@@ -212,10 +213,10 @@ The main enhancements or differences of the proposed \cpp{expected<T,E>} respect
     int result;
     //...
     if (nonDigit)  
-      return expected<int>::from_error(std::invalid_argument("not a number"));
+      return make_expected_from_error<int>(std::invalid_argument("not a number"));
     //...
     if (tooManyDigits) 
-      return expected<int>::from_error(std::out_of_range("overflow"));
+      return make_expected_from_error<int>(std::out_of_range("overflow"));
     //...
     return make_expected(result);
   }
