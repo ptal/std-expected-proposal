@@ -1054,7 +1054,7 @@ namespace experimental {
 Valued instances of \cpp{expected<T, E>} where T is of object type shall contain a value of type \cpp{T} within its own storage. This value is referred to as the contained value of the expected object. Implementations are not permitted to use additional storage, such as dynamic memory, to allocate its contained value. The contained value shall be allocated in a region of the \cpp{expected<T, E>} storage suitably aligned for the type T.
 \newline
 
-Members \cpp{has_value_}, \cpp{val_} and \cpp{error_} are provided for exposition only. Implementations need not provide those members. \cpp{has_value_} indicates whether the expected object's contained value has been initialized (and not yet destroyed); when \cpp{has_value_} is true \cpp{val_} points to the contained value, and when it is false \cpp{error_} points to the exceptional value. \cpp{T} shall be an object type and shall satisfy the requirements of \cpp{Destructible} (Table 24).
+Members \cpp{has_value}, \cpp{val} and \cpp{err} are provided for exposition only. Implementations need not provide those members. \cpp{has_value} indicates whether the expected object's contained value has been initialized (and not yet destroyed); when \cpp{has_value} is true \cpp{val} points to the contained value, and when it is false \cpp{err} points to the erroneous value. \cpp{T} shall be an object type and shall satisfy the requirements of \cpp{Destructible} (Table 24).
 
 \wordingSubSubSec{Constructors}{expected.object.ctor}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
