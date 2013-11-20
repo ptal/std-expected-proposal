@@ -921,7 +921,7 @@ namespace experimental {
   {
   public:
     typedef T value_type;
-    typedef E exceptional_type;
+    typedef E error_type;
     
      // \ref{expected.object.ctor}, constructors
     constexpr expected() noexcept;
@@ -970,9 +970,12 @@ namespace experimental {
     template <class U> T value_or(U&&) &&;
 
   private:
-    bool valued; // exposition only
-    T*   val;    // exposition only
-    T*   error;  // exposition only
+    bool has_value; // exposition only
+    union
+    {
+      T val;  // exposition only
+      E err;  // exposition only
+    };
   };
 
 } // namespace experimental
