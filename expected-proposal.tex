@@ -1062,6 +1062,8 @@ Members \cpp{has_value}, \cpp{val} and \cpp{err} are provided for exposition onl
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Default Constructor
+\todo{Should we provide this constructor only if T is default constructible? Do we need to add the enable_if code in the wording or should we inform this as a remark?\\}
+\todo{General note about this: should we provide the member/constructor only if the "requires" section is fulfilled? It would avoid a compilation error if the users don't use these features.}
 \begin{lstlisting}[xleftmargin=0pt]
 constexpr expected<T, E>::expected() noexcept(see below);
 \end{lstlisting}
@@ -1069,7 +1071,7 @@ constexpr expected<T, E>::expected() noexcept(see below);
 \begin{wordingTextItem}{Requires} \cpp{is_default_constructible<T>::value == true}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Effects}
-Initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the expression \cpp{T()}.\\
+Initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the expression \cpp{T()}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Postconditions}
 \cpp{bool(*this)}.
@@ -1092,10 +1094,10 @@ expected<T, E>::expected(const expected<T, E>& rhs);
 \cpp{is_copy_constructible<E>::value == true}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Effects}
-If \cpp{rhs} is valued initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the expression \cpp{*rhs}.\\
+If \cpp{bool(rhs)} initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the expression \cpp{*rhs}.\\
 
 \noindent
-If \cpp{rhs} is exceptional initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with the expression \cpp{rhs.error_()}.
+If \cpp{!bool(rhs)} initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with the expression \cpp{rhs.error()}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Postconditions}
 \cpp{bool(rhs) == bool(*this)}.
@@ -1115,13 +1117,14 @@ expected<T, E>::expected(expected<T, E> && rhs) noexcept(/*see below*/);
 \cpp{is_move_constructible<E>::value == true}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Effects}
-If \cpp{rhs} is valued initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the expression \cpp{std::move(*rhs)}. \cpp{bool(rhs)} is unchanged.\\
+If \cpp{bool(rhs)} initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the expression \cpp{std::move(*rhs)}. \\
 
 \noindent
-If \cpp{rhs} is exceptional initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with the expression \cpp{std::move(rhs.error())}. \cpp{bool(rhs)} is unchanged.
+If \cpp{!bool(rhs)} initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with the expression \cpp{std::move(rhs.error())}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Postconditions}
-\cpp{bool(rhs) == bool(*this)}.
+\cpp{bool(rhs) == bool(*this)} and \\
+\cpp{bool(rhs)} is unchanged.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Throws}
 Any exception thrown by the selected constructor of \cpp{T} or \cpp{E}.
@@ -1144,7 +1147,7 @@ constexpr expected<T, E>::expected(const T& v);
 Initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the expression \cpp{v}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Postconditions}
-\cpp{*this} is valued.
+\cpp{bool(*this) == true}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Throws}
 Any exception thrown by the selected constructor of \cpp{T}.
@@ -1166,7 +1169,7 @@ constexpr expected<T, E>::expected(T&& v);
 Initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the expression \cpp{std::move(v)}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Postconditions}
-\cpp{*this} is valued.
+\cpp{bool(*this) == true}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Throws}
 Any exception thrown by the selected constructor of \cpp{T}.
@@ -1189,7 +1192,7 @@ constexpr explicit expected(in_place_t, Args&&... args);
 Initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the arguments \cpp{std::forward<Args>(args)...}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Postconditions}
-\cpp{*this} is valued.
+\cpp{bool(*this) == true}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Throws}
 Any exception thrown by the selected constructor of \cpp{T}.
@@ -1236,8 +1239,8 @@ expected<T, E>::~expected();
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
-If \cpp{is_trivially_destructible<T>::value != true} and \cpp{*this} is valued, calls \cpp{val_->T::~T()}.\\
-If \cpp{is_trivially_destructible<E>::value != true} and \cpp{*this} is exceptional, calls \cpp{error_->E::~E()}.
+If \cpp{is_trivially_destructible<T>::value != true} and \cpp{bool(*this)}, calls \cpp{val->T::~T()}.\\
+If \cpp{is_trivially_destructible<E>::value != true} and \cpp{bool(*this)}, calls \cpp{err->E::~E()}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Remarks}
 If \cpp{is_trivially_destructible<T>::value == true} and \cpp{is_trivially_destructible<E>::value == true} then this destructor shall be a trivial destructor.
