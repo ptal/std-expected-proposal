@@ -235,7 +235,7 @@ The main enhancements or differences of the proposed \cpp{expected<T,E>} respect
   }
 \end{lstlisting}
 
-Next follows the parseInt function using a specific error.
+Next follows the \cpp{parseInt} function using a specific error.
 
 \begin{lstlisting}
   expected<int, myerrc> parseInt(const std::string& s)  {
@@ -269,13 +269,13 @@ Next follows the parseInt function using a specific error.
 
 The next use case show how expected scales and compose. 
 
-Given a function that gets an int and one that matches a string, how to define a function that parses an int range"<int>..<int>"
+Given a function that gets an int \cpp{getInt} and one that matches a string \cpp{matchesString}, how to define a function that parses an int range"<int>..<int>" \cpp{getIntRange}
 
 Next follows the Standard IO facet style to get an int from a stream (only the iterators are show)
 
 \begin{lstlisting}
 template <typename InputIterator>
-  InputIterator getInt(InputIterator s, InputIterator end, error& err, int& t);
+  InputIterator getInt(InputIterator s, InputIterator end, errc& err, int& t);
 \end{lstlisting}
 
 In addition to manage with the Iterators, the function changes the error and the int value itself. Let me start by defining the function as if the functions throw an exception when the. Moving to a pure functional style gives.
@@ -284,14 +284,14 @@ In addition to manage with the Iterators, the function changes the error and the
 template <typename InputIterator>
   pair<InputIterator, int> getInt(InputIterator s, InputIterator end);
 template <typename InputIterator>
-  pair<InputIterator, bool> matches(string, InputIterator s, InputIterator end);
+  pair<InputIterator, bool> matchesString(string, InputIterator s, InputIterator end);
 \end{lstlisting}
 
 The get int range could be defined as
 
 \begin{lstlisting}
 template <class InputIterator>
-  pair<InputIterator, pair<int,int>> getIntRange(InputIterator& s, InputIterator e) {
+  pair<InputIterator, pair<int,errc>> getIntRange(InputIterator& s, InputIterator e) {
     auto f = getInt(s,e);
     auto m = matchesString(":", f.first, e).
     auto l = getInt(m.first,e);       
@@ -299,10 +299,8 @@ template <class InputIterator>
 }
 \end{lstlisting}
 
-Clearly this is quite clean. However, 
-
-Moving to a pure functional style with expected is possible.
-This is the role of expected. The signature of getInt, in a pure functional world,  could be either
+Clearly this is quite clean. However, when exceptions are not desirable, \cpp{expected<>} come to play. 
+The signature of \cpp{getInt}, in a pure functional world,  using \cpp{expected}, could be either
 
 \begin{lstlisting}
 template <class InputIterator, class Num>
@@ -315,9 +313,6 @@ or
 template <class InputIterator, class Num>
   expected<pair<InputIterator, int>, pair<InputIterator, errc> > get(InputIterator s, InputIterator e);
 \end{lstlisting}
-
-
-
 
 Next we will analyze both possibilities and conclude which approach is better adapted.
 
@@ -407,15 +402,15 @@ template <class InputIterator>
 }
 \end{lstlisting}
 
-Line 1: obtains an expected<int> possibly with the parsed int. 
-Line 2: the call to next() will return an expect<int> as the lambda returns an expect<int>. This is due to the fact that next unwraps the result so that expect<expect<int>> is unwrapped to expect<int>. 
-If it is valid it calls to the lambda and unwraps the result. It it it invalid, it returns an expect<int> with the obtained error.
-Line 3: returns an expected that combines first and the success of the call to  matchesString("..", s, e).
-Line4:  the call to next() will return an expect<pair<int,int>> as the lambda returns an expect<pair<int,int>>. This is due to the fact that next unwraps the result so that expect<expect<pair<int,int>>> is unwrapped to expect<pair<int,int>>. 
-If it is valid it calls to the lambda and unwraps the result. It it is invalid, it returns an expect<pair<int,int>> with the obtained error.
-Line 5: returns an expected that combines first and the success of the call to  getInt(s, e).
+Line 1: obtains an \cpp{expected<int>} possibly with the parsed int. 
+Line 2: the call to \cpp{next()} will return an \cpp{expect<int>} as the lambda returns an \cpp{expect<int>}. This is due to the fact that next unwraps the result so that \cpp{expect<expect<int>>} is unwrapped to \cpp{expect<int>}. 
+If it is valid it calls to the lambda and unwraps the result. It it it invalid, it returns an \cpp{expect<int>} with the obtained error.
+Line 3: returns an expected that combines first and the success of the call to \cpp{matchesString("..", s, e)}.
+Line4:  the call to \cpp{next()} will return an \cpp{expect<pair<int,int>>} as the lambda returns an \cpp{expect<pair<int,int>>}. This is due to the fact that next unwraps the result so that \cpp{expect<expect<pair<int,int>>>} is unwrapped to \cpp{expect<pair<int,int>>}. 
+If it is valid it calls to the lambda and unwraps the result. It it is invalid, it returns an \cpp{expect<pair<int,int>>} with the obtained error.
+Line 5: returns an expected that combines first and the success of the call to  \cpp{getInt(s, e)}.
 
-Next follows the pair_fold function
+Next follows the \cpp{pair_fold} function
 
 \begin{lstlisting}
 
@@ -428,9 +423,9 @@ template<class T, class F>
   expected<T> pair_fold(T first, F f) {
 \end{lstlisting}
 
-When F() returns expected<void>, the following function will return an expected<T> . It contents depends on the result of the call to f. if the expected result is valid it return an expected with the first argument, otherwise, an expected with the error of the result of the fall to f.  
+When \cpp{F()} returns \cpp{expected<void>}, the following function will return an \cpp{expected<T>} . It contents depends on the result of the call to \cpp{f}. if the expected result is valid it return an expected with the first argument, otherwise, an expected with the error of the result of the fall to \cpp{f}.  
 
-When F() returns expected<U>, the following function will return an expected<pair<T,U>> . It contents depends on the result of the call to f. if the expected result is valid it return an expected with a pair of its first argument and the value of  the result of the call to f , otherwise, an expected with the error of the result of the fall to f.  
+When \cpp{F()} returns \cpp{expected<U>}, the following function will return an \cpp{expected<pair<T,U>>} . It contents depends on the result of the call to \cpp{f}. if the expected result is valid it return an expected with a pair of its first argument and the value of  the result of the call to \cpp{f} , otherwise, an expected with the error of the result of the fall to \cpp{f}.  
 
 This function is useful to store the result of several computations.
 
@@ -811,8 +806,8 @@ MyVec v{ v2, MyAlloc{} };
 
 One could expect that the allocator argument is forwarded in this constructor call to the nested vectors that use the same allocator. Allocator support would enable this. \cpp{std::tuple} offers this functionality.
 
-\subsection{Which exception throw when when the user try to get the expected value but there is none?}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Which exception throw when the user try to get the expected value but there is none?}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 It has been suggested to let the user decide the Exception, that would be throw when the user try to get the expected value but there is none, as third parameter. 
 
