@@ -1063,14 +1063,10 @@ Members \cpp{has_value}, \cpp{val} and \cpp{err} are provided for exposition onl
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Default Constructor
-\todo{Should we provide this constructor only if T is default constructible? Do we need to add the enable_if code in the wording or should we inform this as a remark?\\}
-\todo{General note about this: should we provide the member/constructor only if the "requires" section is fulfilled? It would avoid a compilation error if the users don't use these features.}
 \begin{lstlisting}[xleftmargin=0pt]
 constexpr expected<T, E>::expected() noexcept(see below);
 \end{lstlisting}
 \begin{wordingPara}
-\begin{wordingTextItem}{Requires} \cpp{is_default_constructible<T>::value == true}.
-\end{wordingTextItem}
 \begin{wordingTextItem}{Effects}
 Initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the expression \cpp{T()}.
 \end{wordingTextItem}
@@ -1084,6 +1080,12 @@ Any exception thrown by the default constructor of \cpp{T}.
 The expression inside \cpp{noexcept} is equivalent to:\\
 \cpp{is_nothrow_default_constructible<T>::value}.
 \end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+This signature shall not participate in overload resolution unless\\
+ \cpp{is_default_constructible<T>::value == true}.
+\end{wordingTextItem}
+
+
 \end{wordingPara}
 
 % Copy Constructor
@@ -1091,9 +1093,6 @@ The expression inside \cpp{noexcept} is equivalent to:\\
 expected<T, E>::expected(const expected<T, E>& rhs);
 \end{lstlisting}
 \begin{wordingPara}
-\begin{wordingTextItem}{Requires} \cpp{is_copy_constructible<T>::value == true} and\\
-\cpp{is_copy_constructible<E>::value == true}.
-\end{wordingTextItem}
 \begin{wordingTextItem}{Effects}
 If \cpp{bool(rhs)} initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the expression \cpp{*rhs}.\\
 
@@ -1106,6 +1105,11 @@ If \cpp{!bool(rhs)} initializes the contained value as if direct-non-list-initia
 \begin{wordingTextItem}{Throws}
 Any exception thrown by the selected constructor of \cpp{T} or \cpp{E}.
 \end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+This signature shall not participate in overload resolution unless\\
+\cpp{is_copy_constructible<T>::value == true} and\\
+\cpp{is_copy_constructible<E>::value == true}.
+\end{wordingTextItem}
 \end{wordingPara}
 
 % Move Constructor
@@ -1113,10 +1117,6 @@ Any exception thrown by the selected constructor of \cpp{T} or \cpp{E}.
 expected<T, E>::expected(expected<T, E> && rhs) noexcept(/*see below*/);
 \end{lstlisting}
 \begin{wordingPara}
-\begin{wordingTextItem}{Requires}
-\cpp{is_move_constructible<T>::value == true} and \\
-\cpp{is_move_constructible<E>::value == true}.
-\end{wordingTextItem}
 \begin{wordingTextItem}{Effects}
 If \cpp{bool(rhs)} initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the expression \cpp{std::move(*rhs)}. \\
 
@@ -1132,7 +1132,13 @@ Any exception thrown by the selected constructor of \cpp{T} or \cpp{E}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Remarks}
 The expression inside \cpp{noexcept} is equivalent to:\\
-\cpp{is_nothrow_move_constructible<T>::value && is_nothrow_move_constructible<E>::value}.
+\cpp{is_nothrow_move_constructible<T>::value == trye} and   \\
+\cpp{is_nothrow_move_constructible<E>::value == true}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+This signature shall not participate in overload resolution unless\\
+\cpp{is_move_constructible<T>::value == true} and \\
+\cpp{is_move_constructible<E>::value == true}.
 \end{wordingTextItem}
 \end{wordingPara}
 
@@ -1141,9 +1147,6 @@ The expression inside \cpp{noexcept} is equivalent to:\\
 constexpr expected<T, E>::expected(const T& v);
 \end{lstlisting}
 \begin{wordingPara}
-\begin{wordingTextItem}{Requires}
-\cpp{is_copy_constructible<T>::value == true}. 
-\end{wordingTextItem}
 \begin{wordingTextItem}{Effects}
 Initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the expression \cpp{v}.
 \end{wordingTextItem}
@@ -1156,6 +1159,10 @@ Any exception thrown by the selected constructor of \cpp{T}.
 \begin{wordingTextItem}{Remarks}
 If \cpp{T}'s selected constructor is a \cpp{constexpr} constructor, this constructor shall be a \cpp{constexpr} constructor.
 \end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+This signature shall not participate in overload resolution unless\\
+\cpp{is_copy_constructible<T>::value == true}. 
+\end{wordingTextItem}
 \end{wordingPara}
 
 % Move value constructor
@@ -1163,9 +1170,6 @@ If \cpp{T}'s selected constructor is a \cpp{constexpr} constructor, this constru
 constexpr expected<T, E>::expected(T&& v); 
 \end{lstlisting}
 \begin{wordingPara}
-\begin{wordingTextItem}{Requires}
-\cpp{is_move_constructible<T>::value == true}.
-\end{wordingTextItem}
 \begin{wordingTextItem}{Effects}
 Initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the expression \cpp{std::move(v)}.
 \end{wordingTextItem}
@@ -1178,6 +1182,10 @@ Any exception thrown by the selected constructor of \cpp{T}.
 \begin{wordingTextItem}{Remarks}
 If \cpp{T}'s selected constructor is a \cpp{constexpr} constructor, this constructor shall be a \cpp{constexpr} constructor.
 \end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+This signature shall not participate in overload resolution unless\\
+\cpp{is_move_constructible<T>::value == true}.
+\end{wordingTextItem}
 \end{wordingPara}
 
 % Emplace constructor
@@ -1186,9 +1194,6 @@ template <class... Args>
 constexpr explicit expected(in_place_t, Args&&... args); 
 \end{lstlisting}
 \begin{wordingPara}
-\begin{wordingTextItem}{Requires}
-\cpp{is_constructible<T, Args&&...>::value == true}.
-\end{wordingTextItem}
 \begin{wordingTextItem}{Effects}
 Initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the arguments \cpp{std::forward<Args>(args)...}.
 \end{wordingTextItem}
@@ -1201,6 +1206,10 @@ Any exception thrown by the selected constructor of \cpp{T}.
 \begin{wordingTextItem}{Remarks}
 If \cpp{T}'s constructor selected for the initialization is a \cpp{constexpr} constructor, this constructor shall be a \cpp{constexpr} constructor.
 \end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+This signature shall not participate in overload resolution unless\\
+\cpp{is_constructible<T, Args&&...>::value == true}.
+\end{wordingTextItem}
 \end{wordingPara}
 
 % Emplace constructor with initializer list.
@@ -1209,9 +1218,6 @@ template <class U, class... Args>
 constexpr explicit expected(in_place_t, initializer_list<U> il, Args&&... args); 
 \end{lstlisting}
 \begin{wordingPara}
-\begin{wordingTextItem}{Requires}
-\cpp{is_constructible<T, initializer_list<U>&, Args&&...>::value == true}.
-\end{wordingTextItem}
 \begin{wordingTextItem}{Effects}
 Initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the arguments \cpp{il, std::forward<Args>(args)...}.
 \end{wordingTextItem}
@@ -1228,6 +1234,10 @@ The function shall not participate in overload resolution unless:\\
 
 \noindent
 If \cpp{T}'s constructor selected for the initialization is a \cpp{constexpr} constructor, this constructor shall be a \cpp{constexpr} constructor.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+This signature shall not participate in overload resolution unless\\
+\cpp{is_constructible<T, initializer_list<U>&, Args&&...>::value == true}.
 \end{wordingTextItem}
 \end{wordingPara}
 
@@ -1256,17 +1266,11 @@ If \cpp{is_trivially_destructible<T>::value == true} and \cpp{is_trivially_destr
 expected<T, E>& expected<T, E>::operator=(const expected<T, E>& rhs); 
 \end{lstlisting}
 \begin{wordingPara}
-\begin{wordingTextItem}{Requires}
-\cpp{is_copy_constructible<T>::value == true} and\\
-\cpp{is_copy_assignable<T>::value == true} and\\
-\cpp{is_copy_constructible<E>::value == true} and\\
-\cpp{is_copy_assignable<E>::value == true}.
-\end{wordingTextItem}
 \begin{wordingTextItem}{Effects}
-if \cpp{*this} is valued and \cpp{rhs} is valued, assigns \cpp{*rhs} to the contained value \cpp{val_}, otherwise \\
-if \cpp{*this} is valued and \cpp{rhs} is exceptional, destroys the contained value by calling \cpp{val_->T::~T()} and  initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with \cpp{rhs.error()}, otherwise \\
-if \cpp{*this} is exceptional and \cpp{rhs} is exceptional, assigns \cpp{rhs.error()} to the contained value \cpp{error_}, otherwise \\
-if \cpp{*this} is exceptional and \cpp{rhs} is valued, destroys the contained value by calling \cpp{error_->E::~E()} and  initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with \cpp{rhs.error()}.
+if \cpp{*this} is valued and \cpp{rhs} is valued, assigns \cpp{*rhs} to the contained value \cpp{val}, otherwise \\
+if \cpp{*this} is valued and \cpp{rhs} is exceptional, destroys the contained value by calling \cpp{val->T::~T()} and  initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with \cpp{rhs.error()}, otherwise \\
+if \cpp{*this} is exceptional and \cpp{rhs} is exceptional, assigns \cpp{rhs.error()} to the contained value \cpp{err}, otherwise \\
+if \cpp{*this} is exceptional and \cpp{rhs} is valued, destroys the contained value by calling \cpp{err->E::~E()} and  initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with \cpp{rhs.error()}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Returns}
 \cpp{*this}.
@@ -1277,6 +1281,14 @@ if \cpp{*this} is exceptional and \cpp{rhs} is valued, destroys the contained va
 \begin{wordingTextItem}{Exception Safety}
 If any exception is thrown, the values of \cpp{valued} and \cpp{rhs.valued} remain unchanged. If an exception is thrown during the call to \cpp{T}'s copy constructor, no effect. If an exception is thrown during the call to \cpp{T}'s copy assignment, the state of its contained value is as defined by the exception safety guarantee of \cpp{T}'s copy assignment. If an exception is thrown during the call to \cpp{E}'s copy constructor, no effect. If an exception is thrown during the call to \cpp{E}'s copy assignment, the state of its contained value is as defined by the exception safety guarantee of \cpp{E}'s copy assignment.
 \end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+This signature shall not participate in overload resolution unless\\
+\cpp{is_copy_constructible<T>::value == true} and\\
+\cpp{is_copy_assignable<T>::value == true} and\\
+\cpp{is_copy_constructible<E>::value == true} and\\
+\cpp{is_copy_assignable<E>::value == true}.
+\end{wordingTextItem}
+
 \end{wordingPara}
 
 % Move assignement operator.
@@ -1284,17 +1296,11 @@ If any exception is thrown, the values of \cpp{valued} and \cpp{rhs.valued} rema
 expected<T, E>& expected<T, E>::operator=(expected<T, E>&& rhs) noexcept(/*see below*/); 
 \end{lstlisting}
 \begin{wordingPara}
-\begin{wordingTextItem}{Requires}
-\cpp{is_move_constructible<T>::value == true} and \\
-\cpp{is_move_assignable<T>::value == true} and \\
-\cpp{is_move_constructible<E>::value == true} and
-\cpp{is_move_assignable<E>::value == true}.
-\end{wordingTextItem}
 \begin{wordingTextItem}{Effects}
-if \cpp{*this} is valued and \cpp{rhs} is values, assigns \cpp{std::move(*rhs)} to the contained value \cpp{val_}, otherwise \\
-if \cpp{*this} is valued and \cpp{rhs} is exceptional, destroys the contained value by calling \cpp{val_->T::~T()} and  initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with \cpp{rhs.error()}, otherwise \\
-if \cpp{*this} is exceptional and \cpp{rhs} is exceptional, assigns \cpp{std::move(rhs.error())} to the contained value \cpp{error_}, otherwise  
-if \cpp{*this} is exceptional and \cpp{rhs} is valued, destroys the contained value by calling \cpp{error_->E::~E()} and  initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with \cpp{rhs.error()}.
+if \cpp{*this} is valued and \cpp{rhs} is values, assigns \cpp{std::move(*rhs)} to the contained value \cpp{val}, otherwise \\
+if \cpp{*this} is valued and \cpp{rhs} is exceptional, destroys the contained value by calling \cpp{val->T::~T()} and  initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with \cpp{rhs.error()}, otherwise \\
+if \cpp{*this} is exceptional and \cpp{rhs} is exceptional, assigns \cpp{std::move(rhs.error())} to the contained value \cpp{err}, otherwise  
+if \cpp{*this} is exceptional and \cpp{rhs} is valued, destroys the contained value by calling \cpp{err->E::~E()} and  initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with \cpp{rhs.error()}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Returns}
 \cpp{*this}.
@@ -1310,7 +1316,14 @@ The expression inside \cpp{noexcept} is equivalent to:\\
 \cpp{is_nothrow_move_constructible<E>::value}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Exception Safety}
-If any exception is thrown, the values of \cpp{valued} and \cpp{rhs.valued} remain unchanged. If an exception is thrown during the call to \cpp{T}'s move constructor, the state of \cpp{*rhs.val} is determined by exception safety guarantee of \cpp{T}'s move constructor. If an exception is thrown during the call to \cpp{T}'s move assignment, the state of \cpp{*val_} and \cpp{*rhs.val} is determined by exception safety guarantee of \cpp{T}'s move assignment. If an exception is thrown during the call to \cpp{E}'s move constructor, the state of \cpp{*rhs.error_} is determined by exception safety guarantee of \cpp{E}'s move constructor. If an exception is thrown during the call to \cpp{E}'s move assignment, the state of \cpp{*error_} and \cpp{*rhs.error_} is determined by exception safety guarantee of \cpp{E}'s move assignment.
+If any exception is thrown, the values of \cpp{valued} and \cpp{rhs.valued} remain unchanged. If an exception is thrown during the call to \cpp{T}'s move constructor, the state of \cpp{*rhs.val} is determined by exception safety guarantee of \cpp{T}'s move constructor. If an exception is thrown during the call to \cpp{T}'s move assignment, the state of \cpp{*val} and \cpp{*rhs.val} is determined by exception safety guarantee of \cpp{T}'s move assignment. If an exception is thrown during the call to \cpp{E}'s move constructor, the state of \cpp{*rhs.err} is determined by exception safety guarantee of \cpp{E}'s move constructor. If an exception is thrown during the call to \cpp{E}'s move assignment, the state of \cpp{*err} and \cpp{*rhs.err} is determined by exception safety guarantee of \cpp{E}'s move assignment.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+This signature shall not participate in overload resolution unless\\
+\cpp{is_move_constructible<T>::value == true} and \\
+\cpp{is_move_assignable<T>::value == true} and \\
+\cpp{is_move_constructible<E>::value == true} and
+\cpp{is_move_assignable<E>::value == true}.
 \end{wordingTextItem}
 \end{wordingPara}
 
@@ -1320,12 +1333,8 @@ template <class U>
 expected<T, E>& expected<T, E>::operator=(U&& v); 
 \end{lstlisting}
 \begin{wordingPara}
-\begin{wordingTextItem}{Requires}
-\cpp{is_constructible<T, U>::value == true} and \\
-\cpp{is_assignable<U, TT&, U>::value == true}.
-\end{wordingTextItem}
 \begin{wordingTextItem}{Effects}
-If \cpp{*this} is valued assigns \cpp{std::forward<U>(v)} to the contained value; otherwise destroys the contained value by calling \cpp{error_->E::~E()} and initializes the contained value as if direct-non-list-initializing object of type \cpp{T} with \cpp{std::forward<U>(v)}.
+If \cpp{*this} is valued assigns \cpp{std::forward<U>(v)} to the contained value; otherwise destroys the contained value by calling \cpp{err->E::~E()} and initializes the contained value as if direct-non-list-initializing object of type \cpp{T} with \cpp{std::forward<U>(v)}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Returns}
 \cpp{*this}.
@@ -1334,11 +1343,12 @@ If \cpp{*this} is valued assigns \cpp{std::forward<U>(v)} to the contained value
 \cpp{*this} is valued.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Exception Safety}
-If any exception is thrown, value of valued remains unchanged. If an exception is thrown during the call to \cpp{T}'s constructor, the state of \cpp{v} is determined by exception safety guarantee of \cpp{T}'s constructor. If an exception is thrown during the call to \cpp{T}'s assignment, the state of \cpp{*val_} and \cpp{v} is determined by exception safety guarantee of \cpp{T}'s assignment.
+If any exception is thrown, value of valued remains unchanged. If an exception is thrown during the call to \cpp{T}'s constructor, the state of \cpp{v} is determined by exception safety guarantee of \cpp{T}'s constructor. If an exception is thrown during the call to \cpp{T}'s assignment, the state of \cpp{*val} and \cpp{v} is determined by exception safety guarantee of \cpp{T}'s assignment.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Remarks}
-The function shall not participate in overload resolution unless:\\
-\cpp{is_same<typename decay<U>::type, T>::value == true}.
+This signature shall not participate in overload resolution unless\\
+\cpp{is_constructible<T, U>::value == true} and \\
+\cpp{is_assignable<U, T&, U>::value == true}.
 \end{wordingTextItem}
 \begin{wordingNoteItem}
 The reason to provide such generic assignment and then constraining it so that effectively \cpp{T == U} is to guarantee that assignment of the form \cpp{o = \{\}} is unambiguous.
@@ -1351,11 +1361,8 @@ template <class... Args>
 void expected<T, E>::emplace(Args&&... args); 
 \end{lstlisting}
 \begin{wordingPara}
-\begin{wordingTextItem}{Requires}
-\cpp{is_constructible<T, Args&&...>::value == true}.
-\end{wordingTextItem}
-\begin{wordingTextItem}{Effects}if \cpp{*this} is valued, assigns the contained value \cpp{val_} as if constructing an object of type \cpp{T} with the arguments \cpp{std::forward<Args>(args)...}, otherwise \\
-destroys the contained value by calling \cpp{error_->E::~E()} and  initializes the contained value as if constructing an object of type \cpp{T} with the arguments \cpp{std::forward<Args>(args)...}.
+\begin{wordingTextItem}{Effects}if \cpp{*this} is valued, assigns the contained value \cpp{val} as if constructing an object of type \cpp{T} with the arguments \cpp{std::forward<Args>(args)...}, otherwise \\
+destroys the contained value by calling \cpp{err->E::~E()} and  initializes the contained value as if constructing an object of type \cpp{T} with the arguments \cpp{std::forward<Args>(args)...}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Returns}
 \end{wordingTextItem}
@@ -1365,10 +1372,14 @@ destroys the contained value by calling \cpp{error_->E::~E()} and  initializes t
 \begin{wordingTextItem}{Remarks}
 \end{wordingTextItem}
 \begin{wordingTextItem}{Exception Safety}
-If an exception is thrown during the call to \cpp{T}'s constructor, \cpp{*this} is disengaged, and the previous \cpp{*val_} (if any) has been destroyed.
+If an exception is thrown during the call to \cpp{T}'s constructor, \cpp{*this} is disengaged, and the previous \cpp{*val} (if any) has been destroyed.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Throws}
 Any exception thrown by the selected constructor of \cpp{T}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+This signature shall not participate in overload resolution unless\\
+\cpp{is_constructible<T, Args&&...>::value == true}.
 \end{wordingTextItem}
 \end{wordingPara}
 
@@ -1378,18 +1389,15 @@ template <class U, class... Args>
 void expected<T, E>::emplace(initializer_list<U> il, Args&&... args); 
 \end{lstlisting}
 \begin{wordingPara}
-\begin{wordingTextItem}{Requires}
-\cpp{is_constructible<T, initializer_list<U>&, Args&&...>::value == true}.
-\end{wordingTextItem}
 \begin{wordingTextItem}{Effects}
-if \cpp{*this} is valued, assigns the contained value \cpp{val_} as if constructing an object of type \cpp{T} with the arguments \cpp{il,std::forward<Args>(args)...}, otherwise \\
-destroys the contained value by calling \cpp{error_->E::~E()} and  initializes the contained value as if constructing an object of type \cpp{T} with the arguments \cpp{il,std::forward<Args>(args)...}.
+if \cpp{*this} is valued, assigns the contained value \cpp{val} as if constructing an object of type \cpp{T} with the arguments \cpp{il,std::forward<Args>(args)...}, otherwise \\
+destroys the contained value by calling \cpp{err->E::~E()} and  initializes the contained value as if constructing an object of type \cpp{T} with the arguments \cpp{il,std::forward<Args>(args)...}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Postconditions}
 \cpp{*this} is valued.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Exception Safety}
-If an exception is thrown during the call to \cpp{T}'s constructor, \cpp{*this} is disengaged, and the previous \cpp{*val_} (if any) has been destroyed.
+If an exception is thrown during the call to \cpp{T}'s constructor, \cpp{*this} is disengaged, and the previous \cpp{*val} (if any) has been destroyed.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Throws}
 Any exception thrown by the selected constructor of \cpp{T}.
@@ -1407,26 +1415,19 @@ The function shall not participate in overload resolution unless: \\
 \begin{lstlisting}[xleftmargin=0pt]
 void expected<T, E>::swap(expected<T, E>& rhs) noexcept(/*see below*/); 
 \end{lstlisting}
+\todo{This must be reworded.}
 \begin{wordingPara}
 
-\begin{wordingTextItem}{Note}
-This must be reworded. !!!!!!!!!!!!!!!!!
-\end{wordingTextItem}
 
-\begin{wordingTextItem}{Requires}
-LValues of type \cpp{T} shall be swappable, \cpp{is_move_constructible<T>::value == true}, LValues of type \cpp{E} shall be swappable and \cpp{is_move_constructible<T>::value == true}.
-\end{wordingTextItem}
 \begin{wordingTextItem}{Effects}
-if \cpp{*this} is valued and \cpp{rhs} is exceptional, initializes the contained value of \cpp{rhs} by direct-initialization with \cpp{std::move(*(*this))}, followed by \cpp{val_->T::~T()}, \cpp{swap(init, rhs.init)}, otherwise \\
+if \cpp{*this} is valued and \cpp{rhs} is exceptional, initializes the contained value of \cpp{rhs} by direct-initialization with \cpp{std::move(*(*this))}, followed by \cpp{val->T::~T()}, \cpp{swap(init, rhs.init)}, otherwise \\
 if \cpp{*this} is disengaged and \cpp{rhs} is engaged, initializes the contained value of \cpp{*this} by direct-initialization with \cpp{std::move(*rhs)}, followed by \cpp{rhs.val->T::~T()}, \cpp{swap(init, rhs.init)}, otherwise \\
 if both \cpp{*this} and \cpp{rhs} are engaged) calls \cpp{swap(*(*this), *rhs)}. 
-\end{wordingTextItem}
-\begin{wordingTextItem}{Returns}
 \end{wordingTextItem}
 \begin{wordingTextItem}{Postconditions}
 \end{wordingTextItem}
 \begin{wordingTextItem}{Exception Safety}
-If any exception is thrown, values of \cpp{init} and \cpp{rhs.init} remain unchanged. If an exception is thrown during the call to function swap the state of \cpp{*val_} and \cpp{*rhs.val} is determined by the exception safety guarantee of swap for lvalues of \cpp{T}. If an exception is thrown during the call to \cpp{T}'s move constructor, the state of \cpp{*val_} and \cpp{*rhs.val} is determined by the exception safety guarantee of \cpp{T}'s move constructor.
+If any exception is thrown, values of \cpp{init} and \cpp{rhs.init} remain unchanged. If an exception is thrown during the call to function swap the state of \cpp{*val} and \cpp{*rhs.val} is determined by the exception safety guarantee of swap for lvalues of \cpp{T}. If an exception is thrown during the call to \cpp{T}'s move constructor, the state of \cpp{*val} and \cpp{*rhs.val} is determined by the exception safety guarantee of \cpp{T}'s move constructor.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Throws}
 Any exceptions that the expressions in the Effects clause throw.
@@ -1435,6 +1436,10 @@ Any exceptions that the expressions in the Effects clause throw.
 The expression inside \cpp{noexcept} is equivalent to: \\
 \cpp{is_nothrow_move_constructible<T>::value && noexcept(swap(declval<T&>(), declval<T&>())) &&} \\
 \cpp{is_nothrow_move_constructible<E>::value && noexcept(swap(declval<E&>(), declval<E&>()))}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+The function shall not participate in overload resolution unless: \\
+LValues of type \cpp{T} shall be swappable, \cpp{is_move_constructible<T>::value == true}, LValues of type \cpp{E} shall be swappable and \cpp{is_move_constructible<T>::value == true}.
 \end{wordingTextItem}
 \end{wordingPara}
 
@@ -1451,7 +1456,7 @@ T* expected<T, E>::operator->();
 \cpp{*this} is valued.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Returns}
-\cpp{val_}.
+\cpp{val}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Remarks}
 Unless \cpp{T} is a user-defined type with overloaded unary operator\&, the first function shall be a \cpp{constexpr} function.
@@ -1468,7 +1473,7 @@ T& expected<T, E>::operator*();
 \cpp{*this} is valued.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Returns}
-\cpp{*val_}.
+\cpp{*val}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Remarks}
 The first function shall be a \cpp{constexpr} function.
@@ -1481,7 +1486,7 @@ constexpr explicit expected<T, E>::operator bool() noexcept;
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
-\cpp{has_value_}.
+\cpp{has_value}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Remarks}
 This function shall be a \cpp{constexpr} function.
@@ -1495,7 +1500,7 @@ T& expected<T, E>::value();
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
-\cpp{*val_}, \cpp{if bool(*this)}.
+\cpp{*val}, \cpp{if bool(*this)}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Throws}
 \cpp{bad_expected_access if !*this}.
@@ -1511,21 +1516,22 @@ template <class U>
 constexpr T expected<T, E>::value_or(U&& v) const&; 
 \end{lstlisting}
 \begin{wordingPara}
-\begin{wordingTextItem}{Requires}
-\cpp{is_copy_constructible<T>::value == true} and \\
-\cpp{is_convertible<U&&, T>::value == true}.
-\end{wordingTextItem}
 \begin{wordingTextItem}{Returns}
 \cpp{bool(*this) ? **this : static_cast<T>(std::forward<U>(v))}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Exception Safety}
-If \cpp{has_value_ == true} and exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{has_value_} and \cpp{v} remains unchanged and the state of \cpp{*val_} is determined by the exception safety guarantee of the selected constructor of \cpp{T}. Otherwise, when exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{*this} remains unchanged and the state of \cpp{v} is determined by the exception safety guarantee of the selected constructor of \cpp{T}.
+If \cpp{has_value == true} and exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{has_value} and \cpp{v} remains unchanged and the state of \cpp{*val} is determined by the exception safety guarantee of the selected constructor of \cpp{T}. Otherwise, when exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{*this} remains unchanged and the state of \cpp{v} is determined by the exception safety guarantee of the selected constructor of \cpp{T}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Throws}
 Any exception thrown by the selected constructor of \cpp{T}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Remarks}
 If both constructors of \cpp{T} which could be selected are \cpp{constexpr} constructors, this function shall be a \cpp{constexpr} function.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+The function shall not participate in overload resolution unless: \\
+\cpp{is_copy_constructible<T>::value == true} and \\
+\cpp{is_convertible<U&&, T>::value == true}.
 \end{wordingTextItem}
 \end{wordingPara}
 
@@ -1535,18 +1541,19 @@ template <class U>
 T expected<T, E>::value_or(U&& v) &&; 
 \end{lstlisting}
 \begin{wordingPara}
-\begin{wordingTextItem}{Requires}
-\cpp{is_move_constructible<T>::value == true} and \\
-\cpp{is_convertible<U&&, T>::value == true}.
-\end{wordingTextItem}
 \begin{wordingTextItem}{Returns}
 \cpp{bool(*this) ? std::move(**this) : static_cast<T>(std::forward<U>(v))}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Exception Safety}
-If \cpp{has_value_ == true} and exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{has_value_} and \cpp{v} remains unchanged and the state of \cpp{*val_} is determined by the exception safety guarantee of the \cpp{T}'s constructor. Otherwise, when exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{*this} remains unchanged and the state of \cpp{v} is determined by the exception safety guarantee of the selected constructor of \cpp{T}.
+If \cpp{has_value == true} and exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{has_value} and \cpp{v} remains unchanged and the state of \cpp{*val} is determined by the exception safety guarantee of the \cpp{T}'s constructor. Otherwise, when exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{*this} remains unchanged and the state of \cpp{v} is determined by the exception safety guarantee of the selected constructor of \cpp{T}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Throws}
 Any exception thrown by the selected constructor of \cpp{T}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+The function shall not participate in overload resolution unless: \\
+\cpp{is_move_constructible<T>::value == true} and \\
+\cpp{is_convertible<U&&, T>::value == true}.
 \end{wordingTextItem}
 \end{wordingPara}
 
@@ -1704,6 +1711,8 @@ struct hash<expected<T, E>>;
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Requires}
+\todo{This must be reworded}
+
 The template specilaization \cpp{hash<T>} and \cpp{hash<E>} shall meet the requirements of class template \cpp{hash} (Z.X.Y). The template specialization \cpp{hash<expected<T, E>>} shall meet the requirements of class template \cpp{hash}. For an object \cpp{o} of type \cpp{expected<T, E>}, \cpp{if bool(o) == true}, \cpp{hash<expected<T, E>>()(o)} shall evaluate to the same value as \cpp{hash<T, E>()(*o);} otherwise it evaluates to an unspecified value.
 \end{wordingTextItem}
 \end{wordingPara}
@@ -1726,6 +1735,7 @@ We thanks also to every one that has contributed to the Haskell either monad, as
 Thanks to Fernando Cacciola, Andrzej Krzemieński and every one that has contributed to the wording of N3793 \cite{OptionalRev5}.
 
 \newpage
+\todo{Add the references file}
 \bibliographystyle{plain}
 \bibliography{references}
 
