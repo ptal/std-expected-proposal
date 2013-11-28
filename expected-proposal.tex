@@ -1633,10 +1633,10 @@ constexpr expected<void> make_expected();
 \end{wordingTextItem}
 \end{wordingPara}
 
-% make_expected_from_exception factory.
+% make_expected_from_error factory.
 \begin{lstlisting}[xleftmargin=0pt]
 template <class T>
-constexpr expected<T> make_expected_from_exception(std::exception_ptr v); 
+constexpr expected<T> make_expected_from_error(std::exception_ptr v); 
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
@@ -1644,10 +1644,10 @@ constexpr expected<T> make_expected_from_exception(std::exception_ptr v);
 \end{wordingTextItem}
 \end{wordingPara}
 
-% make_expected_from_exception factory.
+% make_expected_from_error factory.
 \begin{lstlisting}[xleftmargin=0pt]
 template <class T, class E>
-constexpr expected<T> make_expected_from_exception(E&& v);
+constexpr expected<T> make_expected_from_error(E&& v);
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
@@ -1656,20 +1656,20 @@ Equivalent to:
 if(typeid(e)!=typeid(E)){
   throw invalid_argument( "slicing detected");
 }
-return make_expected_from_exception<T>(make_exception_ptr(v));
+return make_expected_from_error<T>(make_exception_ptr(v));
 \end{lstlisting}
 \end{wordingTextItem}
 \end{wordingPara}
 
 
-% make_expected_from_exception factory (flying exception).
+% make_expected_from_error factory (flying exception).
 \begin{lstlisting}[xleftmargin=0pt]
 template <class T>
-constexpr expected<T> make_expected_from_exception(); 
+constexpr expected<T> make_expected_from_error(); 
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
-\cpp{make_expected_from_exception<T>(std::current_exception())}
+\cpp{make_expected_from_error<T>(std::current_exception())}
 \end{wordingTextItem}
 \end{wordingPara}
 
