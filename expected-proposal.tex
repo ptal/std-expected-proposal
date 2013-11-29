@@ -740,7 +740,7 @@ The table \ref{comp-monads} presents a brief comparison between \cpp{optional<T>
 \hline
                     & \textbf{optional} & \textbf{expected} & \textbf{promise/future} \\
 \hline
-\textbf{null value} & yes & no & no \\
+\textbf{specific null value} & yes & no & no \\
 \hline
 \textbf{relational operators} & yes & yes & no \\
 \hline
@@ -752,19 +752,17 @@ The table \ref{comp-monads} presents a brief comparison between \cpp{optional<T>
 \hline
 \textbf{value_type} & yes & yes & no / (yes, see \cite{MoreAsync}).  \\
 \hline
-\textbf{default constructor} & yes & yes (if T is default constructor) & yes \\
+\textbf{default constructor} & yes & yes (if T is default constructible) & yes \\
 \hline
 \textbf{allocators} & no & no & yes \\
 \hline
 \textbf{emplace} & yes & yes & no \\
 \hline
-\textbf{bool conversion} & valid & valid & no \\
+\textbf{bool conversion} & yes & yes & no \\
 \hline
 \textbf{state} & valid (has_value) & valid / has_value & valid / ready / (has_value, see \cite{MoreAsync}) \\
 \hline
-\textbf{observers} & pointer-like / value & pointer-like / value / error & get / (get_exception_ptr, see \cite{MoreAsync}) \\
-\hline
-\textbf{member factories} & value_or & value_or & no (See \cite{MoreAsync}) \\
+\textbf{observers} & pointer-like / value / value_or & pointer-like / value / error / value_or & get / (get_exception_ptr, see \cite{MoreAsync}) \\
 \hline
 \textbf{continuations} & no & then/next/recover / if_all / if_any & then/ when_all / when_any / (next/recover see \cite{MoreAsync}) \\
 \hline
@@ -982,9 +980,10 @@ namespace experimental {
     constexpr expected(const T&);
     constexpr expected(T&&);
     template <class... Args> 
-      constexpr explicit expected(in_place_t, Args&&...);
+      constexpr explicit expected(in_place_t, Args&&...);     
     template <class U, class... Args>
       constexpr explicit expected(in_place_t, initializer_list<U>, Args&&...);
+      
     constexpr expected(exceptional_t, const E&);
     constexpr expected(exceptional_t, E&&);
     template <class... Args> 
@@ -1019,6 +1018,8 @@ namespace experimental {
     E& error();
     template <class U> constexpr T value_or(U&&) const&;
     template <class U> T value_or(U&&) &&;
+    template <class G> constexpr T value_or_throw() const&;
+    template <class G> T value_or_throw() &&;
 
   private:
     bool has_value;    // exposition only
@@ -1034,7 +1035,7 @@ namespace experimental {
 \end{lstlisting}
 
 
-Valued instances of \cpp{expected<T, E>} where T is of object type shall contain a value of type \cpp{T} within its own storage. This value is referred to as the contained value of the expected object. Implementations are not permitted to use additional storage, such as dynamic memory, to allocate its contained value. The contained value shall be allocated in a region of the \cpp{expected<T, E>} storage suitably aligned for the type T.
+Valued instances of \cpp{expected<T, E>} where \cpp{T} and \cpp{E} is of object type shall contain a value of type \cpp{T} or a value of type \cpp{E} within its own storage. This value is referred to as the contained or the exceptional value of the expected object. Implementations are not permitted to use additional storage, such as dynamic memory, to allocate its contained or exceptional value. The contained or exceptional value shall be allocated in a region of the \cpp{expected<T, E>} storage suitably aligned for the type \cpp{T} and \cpp{E}.
 \newline
 
 Members \cpp{has_value}, \cpp{val} and \cpp{err} are provided for exposition only. Implementations need not provide those members. \cpp{has_value} indicates whether the expected object's contained value has been initialized (and not yet destroyed); when \cpp{has_value} is true \cpp{val} points to the contained value, and when it is false \cpp{err} points to the erroneous value. \cpp{T} shall be an object type and shall satisfy the requirements of \cpp{Destructible} (Table 24) \todo{ref needed}.
@@ -1476,6 +1477,7 @@ This function shall be a \cpp{constexpr} function.
 % value accessor.
 \begin{lstlisting}[xleftmargin=0pt]
 constexpr T const& expected<T, E>::value() const;
+T const& expected<T, std::exception_ptr>::value() const;
 T& expected<T, E>::value(); 
 \end{lstlisting}
 \begin{wordingPara}
@@ -1536,6 +1538,60 @@ The function shall not participate in overload resolution unless: \\
 \cpp{is_convertible<U&&, T>::value == true}.
 \end{wordingTextItem}
 \end{wordingPara}
+
+% value_or_throw method.
+\begin{lstlisting}[xleftmargin=0pt]
+template <class G>
+constexpr T expected<T, E>::value_or() const&; 
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Returns}
+If \cpp{bool(*this)} then \cpp{**this}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Exception Safety}
+If \cpp{has_value == true} and exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{has_value} remains unchanged and the state of \cpp{*val} is determined by the exception safety guarantee of the selected constructor of \cpp{T}. Otherwise, when exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{*this} remains unchanged.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Throws}
+If \cpp{! bool(*this)} then \cpp{G(error())}.
+
+\noindent
+Any exception thrown by the selected constructor of \cpp{T}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+If both constructors of \cpp{T} which could be selected are \cpp{constexpr} constructors, this function shall be a \cpp{constexpr} function.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+The function shall not participate in overload resolution unless: \\
+\cpp{is_copy_constructible<T>::value == true} and \\
+\cpp{is_convertible<U&&, T>::value == true}.
+\end{wordingTextItem}
+\end{wordingPara}
+
+% move value_or_throw.
+\begin{lstlisting}[xleftmargin=0pt]
+template <class G>
+T expected<T, E>::value_or() &&; 
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Returns}
+If \cpp{bool(*this)} then \cpp{std::move(**this)}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Exception Safety}
+If \cpp{has_value == true} and exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{has_value} remains unchanged and the state of \cpp{*val} is determined by the exception safety guarantee of the \cpp{T}'s constructor. Otherwise, when exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{*this} remains unchanged.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Throws}
+If \cpp{! bool(*this)} then \cpp{G(error())}.
+
+\noindent
+Any exception thrown by the selected constructor of \cpp{T}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+The function shall not participate in overload resolution unless: \\
+\cpp{is_move_constructible<T>::value == true} and \\
+\cpp{is_convertible<U&&, T>::value == true}.
+\end{wordingTextItem}
+\end{wordingPara}
+
 
 \wordingSubSec{Exceptional construction}{expected.exceptional}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
