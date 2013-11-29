@@ -1,0 +1,14 @@
+
+*.aux
+
+*.bib
+
+*.log
+
+*.out
+
+*.gz
+
+expected-proposal.pdf
+
+*.toc
