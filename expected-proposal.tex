@@ -291,15 +291,15 @@ The get int range could be defined as
 
 \begin{lstlisting}
 template <class InputIterator>
-  pair<InputIterator, pair<int,errc>> getIntRange(InputIterator& s, InputIterator e) {
+  pair<InputIterator, pair<int,errc>> getIntRange(InputIterator s, InputIterator e) {
     auto f = getInt(s,e);
-    auto m = matchesString(":", f.first, e).
+    auto m = matchesString("..", f.first, e).
     auto l = getInt(m.first,e);       
     return make_pair(l.first, make_pair(f.second, l.second));
 }
 \end{lstlisting}
 
-Clearly this is quite clean. However, when exceptions are not desirable, \cpp{expected<>} come to play. 
+Clearly this is quite clean. However, when exceptions are not desirable, \cpp{expected<>} comes into play. 
 The signature of \cpp{getInt}, in a pure functional world,  using \cpp{expected}, could be either
 
 \begin{lstlisting}
@@ -314,33 +314,35 @@ template <class InputIterator, class Num>
   expected<pair<InputIterator, int>, pair<InputIterator, errc> > get(InputIterator s, InputIterator e);
 \end{lstlisting}
 
-Next we will analyze both possibilities and conclude which approach is better adapted.
+Next we analyze both possibilities and conclude which approach is better adapted.
 
 \subsubsection{Returning pair}
+%%%%%%%%%%%%%%%%
 
 So given the following prototypes:
 
 \begin{lstlisting}
 template <class InputIterator>
-  pair<InputIterator, expected<int>> getInt(InputIterator& s, InputIterator e);
+  pair<InputIterator, expected<int>> getInt(InputIterator s, InputIterator e);
 template <class InputIterator>
-  pair<InputIterator, expected<void>> matchesString(std::string, InputIterator& s, InputIterator e);
+  pair<InputIterator, expected<void>> matchesString(std::string, InputIterator s, InputIterator e);
 \end{lstlisting}
 
+\noindent
 how to define a function
 
 \begin{lstlisting}
 template <class InputIterator>
-  pair<InputIterator, expected<pair<int,int>>> getIntRange(InputIterator& s, InputIterator e);
+  pair<InputIterator, expected<pair<int,int>>> getIntRange(InputIterator s, InputIterator e);
 \end{lstlisting}
 
 
-One solution consists to check if there is an error at every step. 
+One solution consists in checking if there is an error at every step. 
 
 \begin{lstlisting}
 template <class InputIterator>
   pair<InputIterator, expected<pair<int,int>>> 
-  getIntRange(InputIterator& s, InputIterator e) {
+  getIntRange(InputIterator s, InputIterator e) {
     auto f = getInt(s, e);
     if (! f.second.valid())  
         return make_pair(f.first, expected<pair<int,int>>::from_error(f.error()));
@@ -359,7 +361,7 @@ Another consists in checking if we can continue at each step
 
 \begin{lstlisting}
 template <class InputIterator>
-  pair<InputIterator, expected<pair<int,int>>> getIntRange(InputIterator& s, InputIterator e) {
+  pair<InputIterator, expected<pair<int,int>>> getIntRange(InputIterator s, InputIterator e) {
     auto f = getInt(s, e);
     InputIterator r = f.first;
     if ( f.valid())  {
@@ -376,128 +378,111 @@ template <class InputIterator>
 }
 \end{lstlisting}
 
-The preceding approaches contains too much noise respect to the exception based solution. An alternative consists in folding the result and use a continuation passing style. 
+The preceding approaches contains too much noise respect to the exception based solution. An alternative is a continuation passing style. 
 
 \begin{lstlisting}
 template <class InputIterator>
-  pair<InputIterator, expected<pair<int,int>>> getIntRange(InputIterator& s, InputIterator e) {
-    return                           getInt(s, e). 
-    		next([](int f) {  fold(f, matchesString("..", s, e)); }). 
-    		next([&it](int f) {  fold(f, getInt(s, e)); });
+  pair<InputIterator, expected<pair<int,int>>> getIntRange(InputIterator s, InputIterator e) {
+    auto f = getInt(s, e);
+    return f | [e](std::pair<InputIterator,int> f) {
+    	       return matchesString("..", f.first, e); 
+	  }  | [e](std::pair<InputIterator,int> m) {
+               return getInt(m.first, e); 
+	  }  | [f](std::pair<InputIterator,int> l) {
+               return make_pair(l.first, make_expected(make_pair(*f.second, l.second))); 
+	  };
 }
 \end{lstlisting}
 
-Note that the control flow has disappeared but the calls have been wrapped on some esoteric lambda. Let me analyze what is behind the scenes
+Note that the control flow has disappeared but the calls have been wrapped on some lambda expressions. Let me analyze what is behind the scenes. The main point is the definition of the operator|(). 
 
 \begin{lstlisting}
-template <class InputIterator>
-  expected<pair<int,int>> getIntRange(InputIterator s, InputIterator e) {
-    return getInt(s, e). // [1]
-    next([&it](int f) { //[2]
-        return pair_fold(f, matchesString("..", s, e)); // [3]
-    }). 
-    next([&it](int f) { // [4]
-        return pair_fold(f, getInt(s, e)); // [5]
-    });
-}
-\end{lstlisting}
-
-Line 1: obtains an \cpp{expected<int>} possibly with the parsed int. 
-Line 2: the call to \cpp{next()} will return an \cpp{expect<int>} as the lambda returns an \cpp{expect<int>}. This is due to the fact that next unwraps the result so that \cpp{expect<expect<int>>} is unwrapped to \cpp{expect<int>}. 
-If it is valid it calls to the lambda and unwraps the result. It it it invalid, it returns an \cpp{expect<int>} with the obtained error.
-Line 3: returns an expected that combines first and the success of the call to \cpp{matchesString("..", s, e)}.
-Line4:  the call to \cpp{next()} will return an \cpp{expect<pair<int,int>>} as the lambda returns an \cpp{expect<pair<int,int>>}. This is due to the fact that next unwraps the result so that \cpp{expect<expect<pair<int,int>>>} is unwrapped to \cpp{expect<pair<int,int>>}. 
-If it is valid it calls to the lambda and unwraps the result. It it is invalid, it returns an \cpp{expect<pair<int,int>>} with the obtained error.
-Line 5: returns an expected that combines first and the success of the call to  \cpp{getInt(s, e)}.
-
-Next follows the \cpp{pair_fold} function
-
-\begin{lstlisting}
-
-template<class T, class F>
-  //requires ! is_void<result_of_t<F()>>::value
-  expected<pair<T, result_of_t<F()>> pair_fold(T first, F f);
-
-template<class T, class F>
-  //requires is_void<result_of_t<F()>>::value
-  expected<T> pair_fold(T first, F f) {
-\end{lstlisting}
-
-When \cpp{F()} returns \cpp{expected<void>}, the following function will return an \cpp{expected<T>} . It contents depends on the result of the call to \cpp{f}. if the expected result is valid it return an expected with the first argument, otherwise, an expected with the error of the result of the fall to \cpp{f}.  
-
-When \cpp{F()} returns \cpp{expected<U>}, the following function will return an \cpp{expected<pair<T,U>>} . It contents depends on the result of the call to \cpp{f}. if the expected result is valid it return an expected with a pair of its first argument and the value of  the result of the call to \cpp{f} , otherwise, an expected with the error of the result of the fall to \cpp{f}.  
-
-This function is useful to store the result of several computations.
-
-\begin{lstlisting}
-
-template<class T, class F>
-//requires ! is_void<result_of_t<F()>>::value
-expected<pair<T, result_of_t<F()>> pair_fold(T first, F f) {
-    auto second = f();
-    if (second.valid())
-        return make_expected(make_pair(first, *second));
-    } else  {
-        return expected<pair<T,int>>::from_error(second.error());
+template <class T, class I, typename E, class F>
+typename std::result_of<F(value_type)>::type type
+operator|(pair_expected<T, I, E> m, F f) {
+    typedef typename std::result_of<F(value_type)>::type result_type;
+    typedef typename result_type::second_type expected_type;
+    if (m.second.valid()) {
+      return f(std::make_pair(m.first, m.second.get()));
     }
-}
-template<class T, class F>
-  //requires is_void<result_of_t<F()>>::value
-  expected<T> pair_fold(T first, F f) {
-    auto second = f();
-    if (second.valid())
-        return make_expected(first);
-    } else  {
-        return expected<pair<T,int>>::from_error(second.error());
-    }
+    return make_pair(m.first, expected_type(exceptional, m.second.get_error()));
 }
 \end{lstlisting}
 
-Yet another alternative (even if it is not adapted to this example) could be to calculate all the expected and if all are valid return the expected result.
+This is very close to the exception based solution
 
 \begin{lstlisting}
 template <class InputIterator>
-  expected<pair<int,int>> getIntRange(InputIterator& s, InputIterator e) {
-    auto f = getInt(s, e);
-    auto m = parse(":", s, e).
-    auto l = getInt(s, e);
-    auto all = if_all(f,m,l);
-    if (all.valid()) return make_expected(make_pair(all.get()));
-    return expected<pair<int,int>>::from_error(all.error());
-    //return make_expected_from_error<pair<int,int>>(all.error());
-}
-\end{lstlisting}
-
-Let see how the function could looks like if it returned a tuple.
-
-\begin{lstlisting}
-template <class InputIterator>
-expected<std::tuple<int,int>> getIntRange(InputIterator& s, InputIterator e) {
-    auto f = getInt(s, e);
-    auto m = parse(":", s, e).
-    auto l = getInt(s, e);
-    return if_all(f, m, l);
-}
-\end{lstlisting}
-
-Note that this is very close to the exception based solution
-
-\begin{lstlisting}
-template <class InputIterator>
-pair<int,int> getIntRange(InputIterator& s, InputIterator e) {
-    auto f = getInt(s, e);
-    auto m = matchesString(":", s, e).
-    auto l = getInt(s, e);       
-    return make_pair(f, l);
+  pair<InputIterator, pair<int,errc>> getIntRange(InputIterator s, InputIterator e) {
+    auto f = getInt(s,e);
+    auto m = matchesString("..", f.first, e).
+    auto l = getInt(m.first,e);       
+    return make_pair(l.first, make_expected(make_pair(f.second, l.second)));
 }
 \end{lstlisting}
 
 \subsubsection{Returning expected}
+%%%%%%%%%%%%%%%%%%%
 
+So given the following prototypes:
+
+\begin{lstlisting}
+template <class InputIterator, class Num>
+  expected<pair<InputIterator, int>, pair<InputIterator, errc> > get(InputIterator s, InputIterator e);
+template <class InputIterator, class Num>
+  expected<InputIterator, pair<InputIterator, errc> > matchesString(InputIterator s, InputIterator e);
+\end{lstlisting}
+
+\noindent
+how to define a function
+
+\begin{lstlisting}
+template <class InputIterator, class Num>
+  expected<pair<InputIterator, pair<int, int>, pair<InputIterator, errc> > 
+  get(InputIterator s, InputIterator e);
+\end{lstlisting}
+
+One solution consists in checking if there is an error at every step. 
+
+\begin{lstlisting}
+template <class InputIterator>
+  expected<pair<InputIterator, pair<int, int>, pair<InputIterator, errc> > 
+  getIntRange(InputIterator s, InputIterator e) {
+    typedef expected<pair<InputIterator, pair<int, int>, pair<InputIterator, errc> > return_type;
+    auto f = getInt(s, e);
+    if (! f.valid())  
+        return return_type::from_error(f.error()));
+    auto m = matchesString(":", s, e).
+    if (! m.valid())  
+        return return_type::from_error(m.error()));
+    auto l = getInt(s, e);
+    if (! l.valid())   
+        return return_type::from_error(l.error()));
+        
+    return make_expected<errc>(make_pair(l->first, make_pair(f->second, l->second));
+}
+\end{lstlisting}
+
+The preceding approach contains too much noise respect to the exception based solution. An alternative is a continuation passing style. 
+
+\begin{lstlisting}
+template <class InputIterator>
+  expected<pair<InputIterator, pair<int, int>, pair<InputIterator, errc> > 
+  getIntRange(InputIterator s, InputIterator e) {
+    auto f = getInt(s, e);
+    return f | [e](std::pair<InputIterator,int> f) {
+    	       return matchesString("..", f.first, e); 
+	  }  | [e](InputIterator m) {
+               return getInt(m.first, e); 
+	  }  | [f](std::pair<InputIterator,int> l) {
+               return make_pair(l.first, make_expected(make_pair(f->second, l.second))); 
+	  };
+}
+\end{lstlisting}
 
 
 \subsection{\todo{Title needed}}
-%%%%%%%%
+%%%%%%%%%%%%%%%%
 
 We should wonder what every programmers do when a function call returns an error:
 
@@ -755,7 +740,7 @@ The table \ref{comp-monads} presents a brief comparison between \cpp{optional<T>
 \hline
                     & \textbf{optional} & \textbf{expected} & \textbf{promise/future} \\
 \hline
-\textbf{null value} & yes & no & no \\
+\textbf{specific null value} & yes & no & no \\
 \hline
 \textbf{relational operators} & yes & yes & no \\
 \hline
@@ -767,19 +752,17 @@ The table \ref{comp-monads} presents a brief comparison between \cpp{optional<T>
 \hline
 \textbf{value_type} & yes & yes & no / (yes, see \cite{MoreAsync}).  \\
 \hline
-\textbf{default constructor} & yes & yes (if T is default constructor) & yes \\
+\textbf{default constructor} & yes & yes (if T is default constructible) & yes \\
 \hline
 \textbf{allocators} & no & no & yes \\
 \hline
 \textbf{emplace} & yes & yes & no \\
 \hline
-\textbf{bool conversion} & valid & valid & no \\
+\textbf{bool conversion} & yes & yes & no \\
 \hline
 \textbf{state} & valid (has_value) & valid / has_value & valid / ready / (has_value, see \cite{MoreAsync}) \\
 \hline
-\textbf{observers} & pointer-like / value & pointer-like / value / error & get / (get_exception_ptr, see \cite{MoreAsync}) \\
-\hline
-\textbf{member factories} & value_or & value_or & no (See \cite{MoreAsync}) \\
+\textbf{observers} & pointer-like / value / value_or & pointer-like / value / error / value_or & get / (get_exception_ptr, see \cite{MoreAsync}) \\
 \hline
 \textbf{continuations} & no & then/next/recover / if_all / if_any & then/ when_all / when_any / (next/recover see \cite{MoreAsync}) \\
 \hline
@@ -997,9 +980,10 @@ namespace experimental {
     constexpr expected(const T&);
     constexpr expected(T&&);
     template <class... Args> 
-      constexpr explicit expected(in_place_t, Args&&...);
+      constexpr explicit expected(in_place_t, Args&&...);     
     template <class U, class... Args>
       constexpr explicit expected(in_place_t, initializer_list<U>, Args&&...);
+      
     constexpr expected(exceptional_t, const E&);
     constexpr expected(exceptional_t, E&&);
     template <class... Args> 
@@ -1034,6 +1018,8 @@ namespace experimental {
     E& error();
     template <class U> constexpr T value_or(U&&) const&;
     template <class U> T value_or(U&&) &&;
+    template <class G> constexpr T value_or_throw() const&;
+    template <class G> T value_or_throw() &&;
 
   private:
     bool has_value;    // exposition only
@@ -1049,7 +1035,7 @@ namespace experimental {
 \end{lstlisting}
 
 
-Valued instances of \cpp{expected<T, E>} where T is of object type shall contain a value of type \cpp{T} within its own storage. This value is referred to as the contained value of the expected object. Implementations are not permitted to use additional storage, such as dynamic memory, to allocate its contained value. The contained value shall be allocated in a region of the \cpp{expected<T, E>} storage suitably aligned for the type T.
+Valued instances of \cpp{expected<T, E>} where \cpp{T} and \cpp{E} is of object type shall contain a value of type \cpp{T} or a value of type \cpp{E} within its own storage. This value is referred to as the contained or the exceptional value of the expected object. Implementations are not permitted to use additional storage, such as dynamic memory, to allocate its contained or exceptional value. The contained or exceptional value shall be allocated in a region of the \cpp{expected<T, E>} storage suitably aligned for the type \cpp{T} and \cpp{E}.
 \newline
 
 Members \cpp{has_value}, \cpp{val} and \cpp{err} are provided for exposition only. Implementations need not provide those members. \cpp{has_value} indicates whether the expected object's contained value has been initialized (and not yet destroyed); when \cpp{has_value} is true \cpp{val} points to the contained value, and when it is false \cpp{err} points to the erroneous value. \cpp{T} shall be an object type and shall satisfy the requirements of \cpp{Destructible} (Table 24) \todo{ref needed}.
@@ -1491,6 +1477,7 @@ This function shall be a \cpp{constexpr} function.
 % value accessor.
 \begin{lstlisting}[xleftmargin=0pt]
 constexpr T const& expected<T, E>::value() const;
+T const& expected<T, std::exception_ptr>::value() const;
 T& expected<T, E>::value(); 
 \end{lstlisting}
 \begin{wordingPara}
@@ -1551,6 +1538,60 @@ The function shall not participate in overload resolution unless: \\
 \cpp{is_convertible<U&&, T>::value == true}.
 \end{wordingTextItem}
 \end{wordingPara}
+
+% value_or_throw method.
+\begin{lstlisting}[xleftmargin=0pt]
+template <class G>
+constexpr T expected<T, E>::value_or() const&; 
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Returns}
+If \cpp{bool(*this)} then \cpp{**this}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Exception Safety}
+If \cpp{has_value == true} and exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{has_value} remains unchanged and the state of \cpp{*val} is determined by the exception safety guarantee of the selected constructor of \cpp{T}. Otherwise, when exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{*this} remains unchanged.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Throws}
+If \cpp{! bool(*this)} then \cpp{G(error())}.
+
+\noindent
+Any exception thrown by the selected constructor of \cpp{T}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+If both constructors of \cpp{T} which could be selected are \cpp{constexpr} constructors, this function shall be a \cpp{constexpr} function.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+The function shall not participate in overload resolution unless: \\
+\cpp{is_copy_constructible<T>::value == true} and \\
+\cpp{is_convertible<U&&, T>::value == true}.
+\end{wordingTextItem}
+\end{wordingPara}
+
+% move value_or_throw.
+\begin{lstlisting}[xleftmargin=0pt]
+template <class G>
+T expected<T, E>::value_or() &&; 
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Returns}
+If \cpp{bool(*this)} then \cpp{std::move(**this)}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Exception Safety}
+If \cpp{has_value == true} and exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{has_value} remains unchanged and the state of \cpp{*val} is determined by the exception safety guarantee of the \cpp{T}'s constructor. Otherwise, when exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{*this} remains unchanged.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Throws}
+If \cpp{! bool(*this)} then \cpp{G(error())}.
+
+\noindent
+Any exception thrown by the selected constructor of \cpp{T}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+The function shall not participate in overload resolution unless: \\
+\cpp{is_move_constructible<T>::value == true} and \\
+\cpp{is_convertible<U&&, T>::value == true}.
+\end{wordingTextItem}
+\end{wordingPara}
+
 
 \wordingSubSec{Exceptional construction}{expected.exceptional}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1648,10 +1689,10 @@ constexpr expected<void> make_expected();
 \end{wordingTextItem}
 \end{wordingPara}
 
-% make_expected_from_exception factory.
+% make_expected_from_error factory.
 \begin{lstlisting}[xleftmargin=0pt]
 template <class T>
-constexpr expected<T> make_expected_from_exception(std::exception_ptr v); 
+constexpr expected<T> make_expected_from_error(std::exception_ptr v); 
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
@@ -1659,10 +1700,10 @@ constexpr expected<T> make_expected_from_exception(std::exception_ptr v);
 \end{wordingTextItem}
 \end{wordingPara}
 
-% make_expected_from_exception factory.
+% make_expected_from_error factory.
 \begin{lstlisting}[xleftmargin=0pt]
 template <class T, class E>
-constexpr expected<T> make_expected_from_exception(E&& v);
+constexpr expected<T> make_expected_from_error(E&& v);
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
@@ -1671,20 +1712,20 @@ Equivalent to:
 if(typeid(e)!=typeid(E)){
   throw invalid_argument( "slicing detected");
 }
-return make_expected_from_exception<T>(make_exception_ptr(v));
+return make_expected_from_error<T>(make_exception_ptr(v));
 \end{lstlisting}
 \end{wordingTextItem}
 \end{wordingPara}
 
 
-% make_expected_from_exception factory (flying exception).
+% make_expected_from_error factory (flying exception).
 \begin{lstlisting}[xleftmargin=0pt]
 template <class T>
-constexpr expected<T> make_expected_from_exception(); 
+constexpr expected<T> make_expected_from_error(); 
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
-\cpp{make_expected_from_exception<T>(std::current_exception())}
+\cpp{make_expected_from_error<T>(std::current_exception())}
 \end{wordingTextItem}
 \end{wordingPara}
 
