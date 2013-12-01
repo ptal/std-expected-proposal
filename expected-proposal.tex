@@ -1012,7 +1012,7 @@ namespace experimental {
     constexpr T const& operator *() const;
     T& operator *();
     constexpr explicit operator bool() const noexcept;
-    constexpr T const& value() const;
+    see below T const& value() const;
     T& value();
     constexpr E const& error() const;
     E& error();
@@ -1591,6 +1591,66 @@ The function shall not participate in overload resolution unless: \\
 \cpp{is_convertible<U&&, T>::value == true}.
 \end{wordingTextItem}
 \end{wordingPara}
+
+
+\wordingSubSec{expected for void}{expected.object.void}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{lstlisting}
+namespace std {
+namespace experimental {
+
+  template <class E>
+  class expected<void, E>
+  {
+  public:
+    typedef void value_type;
+    typedef E error_type;
+    
+     // \ref{expected.object.ctor}, constructors
+    constexpr expected() noexcept;
+    expected(const expected&);
+    expected(expected&&) noexcept(see below);
+    constexpr explicit expected(in_place_t);     
+      
+    constexpr expected(exceptional_t, const E&);
+    constexpr expected(exceptional_t, E&&);
+    template <class... Args> 
+      constexpr explicit expected(exceptional_t, in_place_t, Args&&...);
+    template <class U, class... Args>
+      constexpr explicit expected(exceptional_t, in_place_t,
+                                  initializer_list<U>, Args&&...);
+
+    // \ref{expected.object.dtor}, destructor
+    ~expected();
+
+    // \ref{expected.object.assign}, assignment
+    expected& operator=(const expected&);
+    expected& operator=(expected&&) noexcept(see below);
+    void emplace();
+
+    // \ref{expected.object.swap}, swap
+    void swap(expected&) noexcept(see below);
+
+    // \ref{expected.object.observe}, observers
+    constexpr explicit operator bool() const noexcept;
+    constexpr void value() const;
+    void value();
+    constexpr E const& error() const;
+    E& error();
+
+  private:
+    bool has_value;    // exposition only
+    union
+    {
+      unsigned char dummy;  // exposition only
+      error_type err;  // exposition only
+    };
+  };
+
+} // namespace experimental
+} // namespace std
+\end{lstlisting}
 
 
 \wordingSubSec{Exceptional construction}{expected.exceptional}
