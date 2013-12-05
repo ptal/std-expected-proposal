@@ -92,7 +92,7 @@
 }
 
 \setlength{\droptitle}{10em}
-\title{A proposal to add a utility class to represent expected monads}
+\title{A proposal to add a utility class to represent expected monad}
 \author{}
 \date{}
 
@@ -133,7 +133,7 @@ Basically, the two main error mechanisms are exceptions and return codes. Before
  \item \textbf{Non-Intrusive error} The errors should not monopolize a communication channel dedicated to the normal code flow. They must be as discrete as possible. For instance, the return of a function is a channel that should not be exclusively reserved for errors.
 \end{itemize}
 
-The first and the third characteristic are quite contradictory. The former points out that errors not handled should appear clearly in the code. The latter tells us that the error handling mustn't interfere with the code reading, meaning that it clearly shows the normal execution flow. A comparison between the exception and return codes is given in the table \ref{comp-handling-error}.
+The first and the third characteristic seem to be quite contradictory and deserve further explanation. The former points out that errors not handled should appear clearly in the code. The latter tells us that the error handling mustn't interfere with the code reading, meaning that it clearly shows the normal execution flow. A comparison between the exception and return codes is given in the table \ref{comp-handling-error}.
 
 
 \begin{table}
