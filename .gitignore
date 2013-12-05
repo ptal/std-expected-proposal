@@ -12,3 +12,5 @@
 expected-proposal.pdf
 
 *.toc
+
+.project
