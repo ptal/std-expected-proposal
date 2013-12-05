@@ -27,9 +27,6 @@
 \begin{document}
 
 \maketitle
-\todo{Several other name propositions:\\
-The expected error monad.\\
-Expected – An exceptional error monad.\\}
 \section{Information}
 
 \begin{itemize}
@@ -41,19 +38,34 @@ Expected – An exceptional error monad.\\}
 
 \section{Abstract}
 
-The Expected library has been first introduced by Alexandrescu during the C++ and Beyond conference in 2012. It is a new way to handle errors in C++ lying somewhere between the classic error-code returns and the exceptions. Expected is fully compatible with exception-throwing code and helps to design exception-free interface. This open the door to novel techniques enforcing error handling safety with a clean code using the monad theory (borrowed from functional language such as Haskell). This talk will give an overview of this library and will present typical examples using the Expected class.
+The Expected library has been first introduced by Alexandrescu during the C++ and Beyond conference in 2012\cite{AlexandrescuExpected}. It is a new way to handle errors in C++ lying somewhere between the classic error-code returns and the exceptions. Expected is fully compatible with exception-throwing code and helps to design exception-free interface. This open the door to novel techniques enforcing error handling safety while keeping a clean code using the monad theory (borrowed from functional language such as Haskell). This talk will give an overview of this library and will present typical examples using the Expected class.
 
 \section{Authors}
 
 \subsection{Pierre T\textsc{albot}}
 
-Pierre Talbot is a student at the University of Pierre et Marie Curie in Paris. He discovered C++ and the open-source world in 2011 during a Google Summer of Code, thanks to Boost for being his first mentoring organization. Since he continued to work on open-source projects, in the Boost organization and more recently for the Battle for Wesnoth game.
+Pierre Talbot is a student pursuing a Master in Computer Science at the University of Pierre et Marie Curie in Paris. He discovered C++ and the open-source world in 2011 during a Google Summer of Code, thanks to Boost for being his first mentoring organization. Since he continued to work on open-source projects, in the Boost organization and more recently for the Battle for Wesnoth game.
 
 \subsection{Vicente J. B\textsc{otet} E\textsc{scriba}}
 
-Vicente J. Botet Escriba got a Master in Computer Science from University Complutense of Madrid- Spain in 1986. More than 25 years of experience on software engineering for fault tolerant systems and more than 15 years of C++ experience. His main research area is on Concurrent Systems and Parallel Computing. Since January 2008 contributes actively to the Boost community. Co-author and maintainer of Boost.Thread/Chrono/Ratio. He is software engineer at Alcatel-Lucent France where he focuses on adaptation of very large telecom systems to multi-core platforms.
+Vicente J. Botet Escriba got a Master in Computer Science from University Complutense of Madrid– Spain in 1986. More than 25 years of experience on software engineering for fault tolerant systems and more than 15 years of C++ experience. His main research area is on Concurrent Systems and Parallel Computing. Since January 2008 contributes actively to the Boost community. Co-author and maintainer of Boost.Thread/Chrono/Ratio. He is software engineer at Alcatel-Lucent France where he focuses on adaptation of very large telecom systems to multi-core platforms.
 
-\section{Presentation overview}
+\section{Talk overview}
 
+The talk will start with a presentation of the existing techniques for handling errors in C++ and other language. We will compare the return error code and the exception systems and then we will introduce Expected in this context. The C++14 Optional class is a similar utility class and we will speak about the conceptual differences between these classes.
+\newline
+
+The core of the Expected class will be presented next, we will directly go through an example to present the different features and semantics of this class (notably the move semantic is different from Optional). We will discuss the fact that the Expected class can be use to define exception-free interface using exception-throwing classes.
+\newline
+
+The monadic methods \lstinline{then} and \lstinline{recover} will be presented next through different examples. They enable programming technique that help to distinguish the error-handling layer from the main code flow. Moreover, they help the programmer to handle errors in a non-invasive way while being visible if forgotten. We will briefly talk about the monad in functional language and why Expected is actually a monad. The rest of the talk will speak about the possibility of using a similar interface for potential monad such as Optional or Future.
+
+\section{Resources}
+
+A draft of a standard proposal is available\cite{std.expected} with an on-going implementation\cite{boost.expected} that will be proposed for a review to the Boost community soon enough.
+
+\newpage
+\bibliographystyle{plain}
+\bibliography{references}
 
 \end{document}
