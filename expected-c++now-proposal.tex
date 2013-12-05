@@ -52,13 +52,13 @@ Vicente J. Botet Escriba got a Master in Computer Science from University Complu
 
 \section{Talk overview}
 
-The talk will start with a presentation of the existing techniques for handling errors in C++ and other language. We will compare the return error code and the exception systems and then we will introduce Expected in this context. The C++14 Optional class is a similar utility class and we will speak about the conceptual differences between these classes.
+The talk will start with a presentation of the existing techniques for handling errors in C++ and other languages. We will compare the return error code and the exception systems and then we will introduce Expected in this context. The C++14 Optional class is a similar utility class and we will speak about the conceptual differences between these classes.
 \newline
 
-The core of the Expected class will be presented next, we will directly go through an example to present the different features and semantics of this class (notably the move semantic is different from Optional). We will discuss the fact that the Expected class can be use to define exception-free interface using exception-throwing classes.
+The core of the Expected class will be presented next, we will directly go through an example to present the different features and semantics of this class (notably the move semantic is different from Optional). We will discuss the fact that the Expected class can be used to define exception-free interface using exception-throwing classes.
 \newline
 
-The monadic methods \lstinline{then} and \lstinline{recover} will be presented next through different examples. They enable programming technique that help to distinguish the error-handling layer from the main code flow. Moreover, they help the programmer to handle errors in a non-invasive way while being visible if forgotten. We will briefly talk about the monad in functional language and why Expected is actually a monad. The rest of the talk will speak about the possibility of using a similar interface for potential monad such as Optional or Future.
+The monadic methods \lstinline{then} and \lstinline{recover} will be presented next through different examples. They enable programming techniques that help to distinguish the error-handling layer from the normal code flow. Moreover, they help the programmer to handle errors in a non-invasive way while being visible if forgotten. We will briefly talk about the monads in functional language and why Expected is actually a monad. The rest of the talk will discuss about the possibilities of using a similar interface for other potential monad classes such as Optional or Future.
 
 \section{Resources}
 
