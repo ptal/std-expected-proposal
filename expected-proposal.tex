@@ -119,7 +119,7 @@
 \section{Introduction}
 %%%%%%%%%%%
 
-Class template \cpp{expected<T,E>} proposed here is a type that may contain a value of type \cpp{T} or a value of type \cpp{E} in its storage space. \cpp{T} represents the expected value, \cpp{E} represents the exceptional reason why it doesn't contains a value of type \cpp{T}. Its interface allows to query if the underlying value is either the expected value (of type \cpp{T}) or an error value (of type \cpp{E}). The original idea comes from Andrei Alexandrescu C++ and Beyond 2012: Systematic Error Handling in C++ talk \cite{AlexandrescuExpected}. The interface is based on \cpp{std::optional} N3793 \cite{OptionalRev5} and Haskell monad either. It requires no changes to core language, and breaks no existing code.
+Class template \cpp{expected<T,E>} proposed here is a type that may contain a value of type \cpp{T} or a value of type \cpp{E} in its storage space. \cpp{T} represents the expected value, \cpp{E} represents the reason explaining why it doesn't contains a value of type \cpp{T}, that is the unexpected value. Its interface allows to query if the underlying value is either the expected value (of type \cpp{T}) or an unexpected value (of type \cpp{E}). The original idea comes from Andrei Alexandrescu C++ and Beyond 2012: Systematic Error Handling in C++ talk \cite{AlexandrescuExpected}. The interface is based on \cpp{std::optional} N3793 \cite{OptionalRev5} and Haskell monads. It requires no changes to core language, and breaks no existing code.
 
 \section{Motivation and Scope}
 %%%%%%%%%%%%%%%%
@@ -220,7 +220,8 @@ int safe_divide(int i, int j)
 }
 \end{lstlisting}
 
-Using \cpp{expect<int>}
+\noindent
+Using \cpp{expected<int>}
 
 \begin{lstlisting}
 expected<int> safe_divide(int i, int j)
@@ -230,44 +231,49 @@ expected<int> safe_divide(int i, int j)
 }
 \end{lstlisting}
 
-(1) uses un implicit conversion from exceptional<E> to expected<T,E>. 
+(1) uses un implicit conversion from unexpected<E> to expected<T,E>. 
 
 (2) uses un implicit conversion from T to expected<T,E>.
 
-The good news are that we have a clean way to say that a function has failed without using the exception machinery, and we can give information about why it failed as well. The bad news is that this function is going to be tedious to use. For instance, the exception based function:
+The advantages are that we have a clean way to say that a function has failed without using the exception machinery, and we can give precise information about why it failed as well. The liability is that this function is going to be tedious to use. For instance, the exception based function:
 
 \begin{lstlisting}
-int f(int i, int j, int k)
+int f1(int i, int j, int k)
 {
   return i+ safe_divide(j,k);
 }
 \end{lstlisting}
 
-becomes
+becomes using expected<int> 
 
 \begin{lstlisting}
-boost::expected<int> f(int i, int j, int k)
+expected<int> ex_f1(int i, int j, int k)
 {
   auto q2 = safe_divide(j, k);
-  if (! q2.valid()) return q2.exceptional();
-  return i + q2.get();
+  if (! q2.valid()) return q2.get_unexpected(); // (1)
+  return i + q2.get_value(); // (2)
 }
 \end{lstlisting}
 
-This is pretty complicated considering what we are trying to do. In addition, the return type expected<int> is different from the input types (which are all ints), so it's going to be hard to compose functions which return these expected<> values with functions that don't. But let's press on for now and deal with those problems later.
+(1) When safe_divide fails we forward the unexpected value.
 
-We can use expectd<T> to represent multiple kinds of error conditions. For instance, with integer division, we might want to fail if the two numbers are not evenly divisible as well as checking for division by zero. We can improve our safe_divide function accordingly:
+(2) Here we know that q2 has a valid value.
+
+This is pretty complicated considering what we are trying to do. In addition, the return type expected<int> is different from the input types (which are all ints), so it's going to be hard to compose functions which return these \cpp{expected<>} values with functions that don't. But let's press on for now and deal with those problems later.
+
+We can use \cpp{expectd<T>} to represent different error conditions. For instance, with integer division, we might want to fail if the two numbers are not evenly divisible as well as checking for division by zero. We can improve our safe_divide function accordingly:
 
 \begin{lstlisting}
 struct NotDivisible: public std::exception
 {
   int i, j;
+  NotDivisible(int i, int j) : i(i), j(j) {}
 };
 
 expected<int> safe_divide(int i, int j)
 {
-  if (j==0) return make_unexpected(DivideByZero()); 
-  if (i%j !=0) return make_unexpected(NotDivisible());
+  if (j == 0) return make_unexpected(DivideByZero()); 
+  if (i%j != 0) return make_unexpected(NotDivisible(i,j));
   else return i / j; 
 }
 \end{lstlisting}
@@ -308,17 +314,17 @@ boost::expected<int> divide(int i, int j)
 Lets continue with this very simple function on integers:
 
 \begin{lstlisting}
-int f(int i, int j, int k)
+int f2(int i, int j, int k)
 {
   return safe_divide(i,k) + safe_divide(j,k);
 }
 \end{lstlisting}
 
-Before I show you the monadic version of this, I want to rewrite the function f slightly:
+Before I show you the expected<> version of this function, I want to rewrite the function f slightly:
 
 
 \begin{lstlisting}
-int f(int i, int j, int k)
+int f2(int i, int j, int k)
 {
   auto s1 = safe_divide(i,k);
   auto s2 = safe_divide(j,k);
@@ -327,33 +333,33 @@ int f(int i, int j, int k)
 \end{lstlisting}
 
 
-Now let's write this code using an expected<int> type, but without using the monadic machinery. We get this:
+Now let's write this code using an expected<int> type. We get this:
 
 \begin{lstlisting}
-boost::expected<int> f(int i, int j, int k)
+boost::expected<int> f2(int i, int j, int k)
 {
   auto eq1 = safe_divide(i, k);
-  if (!eq1.valid()) return eq1.get_exceptional();
-  auto q1 = eq1.value();
+  if (!eq1.valid()) return eq1.get_unexpected();
+  auto q1 = *eq1;
 
   auto eq2 = safe_divide(j, k);
-  if (!eq2.valid()) return eq2.get_exceptional();
-  auto q2 = eq2.value();
+  if (!eq2.valid()) return eq2.get_unexpected();
+  auto q2 = *eq2;
 
   return q1 + q2;
 }
 \end{lstlisting}
 
-This is nice in the sense that whenever there is an error (as we have defined it) we get a specific error result. Now let's rewrite this using the a possible C++ language extension:
+This is nice in the sense that whenever there is an error (as we have defined it) we get a specific error result. Now let's rewrite this using a possible C++ language extension:
 adding a expect operator, something similar to the await extension for futures.  The meaning of expect expr is:
 
 \begin{itemize}
- \item if the expected expr is not valid return with its exceptional value,
+ \item if the expected expr is not valid return with its unexpected value,
  \item otherwise store the value for further evaluation.
 \end{itemize}
 
 \begin{lstlisting}
-boost::expected<int> g(int i, int j, int k)
+boost::expected<int> g2(int i, int j, int k)
 {
   return expect safe_divide(i,k) + expect safe_divide(j,k);
 }
@@ -362,7 +368,7 @@ boost::expected<int> g(int i, int j, int k)
 or 
 
 \begin{lstlisting}
-boost::expected<int> g(int i, int j, int k)
+boost::expected<int> g2(int i, int j, int k)
 {
   auto q1 = expect safe_divide(i,k);
   auto q2 = expect safe_divide(j,k);
@@ -370,9 +376,9 @@ boost::expected<int> g(int i, int j, int k)
 }
 \end{lstlisting}
 
-This gives the exact same results as the previous version. However, the function g is much simpler and clearer than f because it doesn't have to explicitly handle any of the error cases. When an error case occurs, it is returned as the result of the function, but if not, the correct result of a subexpression is bound to a name (q1 or q2), and that result can be used in later parts of the computation. The code is a lot simpler to write. The more complicated the error-handling function, the more important this will be.
+This would give the exact same results as the previous version. However, the function \cpp{g2} is much simpler and clearer than \cpp{f2} because it doesn't have to explicitly handle any of the error cases. When an error case occurs, it is returned as the result of the function, but if not, the correct result of a subexpression is bound to a name (q1 or q2), and that result can be used in later parts of the computation. The code is a lot simpler to write. The more complicated the error-handling function, the more important this will be.
 
-But, we don't have this except extension yet. We can rewrite this without using the expect-extension as follows:
+But, we don't have this except extension yet. We can rewrite this without using the expect-extension and using a continuation passing style as follows:
 
 \begin{lstlisting}
 boost::expected<int> f(int i, int j, int k)
@@ -385,14 +391,23 @@ boost::expected<int> f(int i, int j, int k)
 }
 \end{lstlisting}
 
+We can also compose all the expected values using the when_all function.
 
-But this introduce too much noise. Waiting for a expect-extension the user could define a macro
+\begin{lstlisting}
+boost::expected<int> f(int i, int j, int k)
+{
+  return when_all(safe_divide(i, k), safe_divide(j,k)).then(add);
+}
+\end{lstlisting}
+
+
+Waiting for a expect-extension the user could define a macro
 
 \begin{lstlisting}
 #define EXPECT(V, EXPR) \
 auto BOOST_JOIN(expected,V) = EXPR; \
-if (! BOOST_JOIN(expected,V).valid()) return BOOST_JOIN(expected,V).get_exceptional(); \
-auto V =BOOST_JOIN(expected,V).value()
+if (! BOOST_JOIN(expected,V).valid()) return BOOST_JOIN(expected,V).get_unexpected(); \
+auto V =*BOOST_JOIN(expected,V)
 \end{lstlisting}
 
 and define f as
@@ -406,7 +421,7 @@ boost::expected<int> f(int i, int j, int k)
 }
 \end{lstlisting}
 
-If the operator+ is defined for expected<int>
+Alternatively, if the \cpp{operator+} is defined for \cpp{expected<int>}
 
 \begin{lstlisting}
 template <class T>
@@ -418,10 +433,10 @@ expected<T> operator+(expected<T> i, expected<T> j)
 }
 \end{lstlisting}
 
-the function f could be defined as
+the function f2 could be defined as
 
 \begin{lstlisting}
-boost::expected<int> f(int i, int j, int k)
+boost::expected<int> f2(int i, int j, int k)
 {
   return safe_divide(i, k) + safe_divide(j, k);
 }
@@ -606,7 +621,7 @@ operator|(pair_expected<T, I, E> m, F f) {
     if (m.second.valid()) {
       return f(std::make_pair(m.first, m.second.value()));
     }
-    return make_pair(m.first, expected_type(exceptional, m.second.get_error()));
+    return make_pair(m.first, expected_type(m.second.get_unexpected()));
 }
 \end{lstlisting}
 
@@ -663,11 +678,11 @@ template <class InputIterator>
   expected<pair<InputIterator, pair<int, int>, pair<InputIterator, errc> > 
   getIntRange(InputIterator s, InputIterator e) {
     auto f = getInt(s, e);
-    if (! f.valid())  return f.get_exceptional();
+    if (! f.valid())  return f.get_unexpected();
     auto m = matchesString(":", f->first, e).
-    if (! m.valid()) return m.get_exceptional();
+    if (! m.valid()) return m.get_unexpected();
     auto l = getInt(*m, e);
-    if (! l.valid()) return l.get_exceptional();
+    if (! l.valid()) return l.get_unexpected();
         
     return make_pair(l->first, make_pair(f->second, l->second);
 }
@@ -1057,7 +1072,7 @@ It has been suggested also to extend the design into something that contains
 \item an error_code
 \end{itemize}
 
-Again there is no major difficulty to implement it, but instead of having one variation point we have two, that is is there a value, and if not, if is there an exception_ptr. While this would need only an extra test on the exceptional case, the authors think that it is not worth doing it as all the copy/move/swap operations would be less efficient.  
+Again there is no major difficulty to implement it, but instead of having one variation point we have two, that is, is there a value, and if not, if is there an exception_ptr. While this would need only an extra test on the exceptional case, the authors think that it is not worth doing it as all the copy/move/swap operations would be less efficient.  
 
 \begin{lstlisting}
 template <class T, class ErrorCode = none, class Exception = expected_default_exception<ErrorCode>>
@@ -1079,7 +1094,7 @@ Insert a new section.
 \wordingSubSec{In general}{expected.general}
 %%%%%%%%%%%%%%%%%%%%%%%%
 
-This subclause describes class template expected that represents expected objects. An expected object for object type T is an object that contains the storage for another object and manages the lifetime of this contained object T, alternatively it could contain the storage for another exceptional object E. The contained object may not be initialized after the expected object has been initialized, and may not be destroyed before the expected object has been destroyed. The initialization state of the contained object is tracked by the expected object.
+This subclause describes class template expected that represents expected objects. An expected object for object type T is an object that contains the storage for another object and manages the lifetime of this contained object T, alternatively it could contain the storage for another unexpected object E. The contained object may not be initialized after the expected object has been initialized, and may not be destroyed before the expected object has been destroyed. The initialization state of the contained object is tracked by the expected object.
 
 \wordingSubSec{Header <experimental/expected> synopsis}{expected.synop}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1093,9 +1108,9 @@ namespace std {namespace experimental {
   template <class E>
   class expected<void, E>;
   
-  // \ref{expected.exceptional}, exceptional construction
-  struct exceptional_t{};
-  constexpr exceptional_t exceptional{};
+  // \ref{expected.unexpected}, unexpected object type
+  template <class E>
+  struct unexpected{};
    
   // \ref{expected.bad_expected_access}, class bad_expected_access
   class bad_expected_access;
@@ -1155,12 +1170,13 @@ namespace std {namespace experimental {
 %%%%%%%%%%%%%%%%%%%%%%
 
 An instance of \cpp{expected<T,E>} is said to be valued if it contains an object of type \cpp{T}.
-An instance of \cpp{expected<T,E>} is said to be exceptional if it contains an object of type \cpp{E}.
+An instance of \cpp{expected<T,E>} is said to be unexpected if it contains an object of type \cpp{E}.
 
 \wordingSubSec{expected for object types}{expected.object}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \begin{lstlisting}
+
 namespace std {
 namespace experimental {
 
@@ -1182,13 +1198,9 @@ namespace experimental {
     template <class U, class... Args>
       constexpr explicit expected(in_place_t, initializer_list<U>, Args&&...);
       
-    constexpr expected(exceptional_t, const E&);
-    constexpr expected(exceptional_t, E&&);
-    template <class... Args> 
-      constexpr explicit expected(exceptional_t, in_place_t, Args&&...);
-    template <class U, class... Args>
-      constexpr explicit expected(exceptional_t, in_place_t,
-                                  initializer_list<U>, Args&&...);
+    constexpr expected(unexpected<E> const&);
+    template <class Err> 
+    constexpr expected(unexpected<Err> const&);
 
     // \ref{expected.object.dtor}, destructor
     ~expected();
@@ -1233,7 +1245,7 @@ namespace experimental {
 \end{lstlisting}
 
 
-Valued instances of \cpp{expected<T, E>} where \cpp{T} and \cpp{E} is of object type shall contain a value of type \cpp{T} or a value of type \cpp{E} within its own storage. This value is referred to as the contained or the exceptional value of the expected object. Implementations are not permitted to use additional storage, such as dynamic memory, to allocate its contained or exceptional value. The contained or exceptional value shall be allocated in a region of the \cpp{expected<T, E>} storage suitably aligned for the type \cpp{T} and \cpp{E}.
+Valued instances of \cpp{expected<T, E>} where \cpp{T} and \cpp{E} is of object type shall contain a value of type \cpp{T} or a value of type \cpp{E} within its own storage. This value is referred to as the contained or the unexpected value of the expected object. Implementations are not permitted to use additional storage, such as dynamic memory, to allocate its contained or unexpected value. The contained or unexpected value shall be allocated in a region of the \cpp{expected<T, E>} storage suitably aligned for the type \cpp{T} and \cpp{E}.
 \newline
 
 Members \cpp{has_value}, \cpp{val} and \cpp{err} are provided for exposition only. Implementations need not provide those members. \cpp{has_value} indicates whether the expected object's contained value has been initialized (and not yet destroyed); when \cpp{has_value} is true \cpp{val} points to the contained value, and when it is false \cpp{err} points to the erroneous value. \cpp{T} shall be an object type and shall satisfy the requirements of \cpp{Destructible} (Table 24) \todo{ref needed}.
@@ -1420,6 +1432,53 @@ This signature shall not participate in overload resolution unless\\
 \end{wordingTextItem}
 \end{wordingPara}
 
+
+% Unexpected Constructor
+\begin{lstlisting}[xleftmargin=0pt]
+constexpr expected<T, E>::expected(unexpected<E> const& e);
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Effects}
+Initializes the unexpected value as if direct-non-list-initializing an object of type \cpp{E} with the expression \cpp{e}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Postconditions}
+\cpp{bool(*this) == false}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Throws}
+Any exception thrown by the selected constructor of \cpp{E}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+If \cpp{E}'s selected constructor is a \cpp{constexpr} constructor, this constructor shall be a \cpp{constexpr} constructor.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+This signature shall not participate in overload resolution unless\\
+\cpp{is_copy_constructible<E>::value == true}. 
+\end{wordingTextItem}
+\end{wordingPara}
+
+% Unexpected move constructor
+\begin{lstlisting}[xleftmargin=0pt]
+constexpr expected<T, E>::expected(unexpected<E>&& e); 
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Effects}
+Initializes the unexpected value as if direct-non-list-initializing an object of type \cpp{E} with the expression \cpp{std::move(e.value())}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Postconditions}
+\cpp{bool(*this) == false}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Throws}
+Any exception thrown by the selected constructor of \cpp{TE}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+If \cpp{E}'s selected constructor is a \cpp{constexpr} constructor, this constructor shall be a \cpp{constexpr} constructor.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+This signature shall not participate in overload resolution unless\\
+\cpp{is_move_constructible<E>::value == true}.
+\end{wordingTextItem}
+\end{wordingPara}
+
 \wordingSubSubSec{Destructor}{expected.object.dtor}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -1447,9 +1506,9 @@ expected<T, E>& expected<T, E>::operator=(const expected<T, E>& rhs);
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
 if \cpp{*this} is valued and \cpp{rhs} is valued, assigns \cpp{*rhs} to the contained value \cpp{val}, otherwise \\
-if \cpp{*this} is valued and \cpp{rhs} is exceptional, destroys the contained value by calling \cpp{val->T::~T()} and  initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with \cpp{rhs.error()}, otherwise \\
-if \cpp{*this} is exceptional and \cpp{rhs} is exceptional, assigns \cpp{rhs.error()} to the contained value \cpp{err}, otherwise \\
-if \cpp{*this} is exceptional and \cpp{rhs} is valued, destroys the contained value by calling \cpp{err->E::~E()} and  initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with \cpp{rhs.error()}.
+if \cpp{*this} is valued and \cpp{rhs} is unexpected, destroys the contained value by calling \cpp{val->T::~T()} and  initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with \cpp{rhs.error()}, otherwise \\
+if \cpp{*this} is unexpected and \cpp{rhs} is unexpected, assigns \cpp{rhs.error()} to the contained value \cpp{err}, otherwise \\
+if \cpp{*this} is unexpected and \cpp{rhs} is valued, destroys the contained value by calling \cpp{err->E::~E()} and  initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with \cpp{rhs.error()}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Returns}
 \cpp{*this}.
@@ -1477,9 +1536,9 @@ expected<T, E>& expected<T, E>::operator=(expected<T, E>&& rhs) noexcept(/*see b
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
 if \cpp{*this} is valued and \cpp{rhs} is values, assigns \cpp{std::move(*rhs)} to the contained value \cpp{val}, otherwise \\
-if \cpp{*this} is valued and \cpp{rhs} is exceptional, destroys the contained value by calling \cpp{val->T::~T()} and  initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with \cpp{rhs.error()}, otherwise \\
-if \cpp{*this} is exceptional and \cpp{rhs} is exceptional, assigns \cpp{std::move(rhs.error())} to the contained value \cpp{err}, otherwise  
-if \cpp{*this} is exceptional and \cpp{rhs} is valued, destroys the contained value by calling \cpp{err->E::~E()} and  initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with \cpp{rhs.error()}.
+if \cpp{*this} is valued and \cpp{rhs} is unexpected, destroys the contained value by calling \cpp{val->T::~T()} and  initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with \cpp{rhs.error()}, otherwise \\
+if \cpp{*this} is unexpected and \cpp{rhs} is unexpected, assigns \cpp{std::move(rhs.error())} to the contained value \cpp{err}, otherwise  
+if \cpp{*this} is unexpected and \cpp{rhs} is valued, destroys the contained value by calling \cpp{err->E::~E()} and  initializes the contained value as if direct-non-list-initializing an object of type \cpp{E} with \cpp{rhs.error()}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Returns}
 \cpp{*this}.
@@ -1599,7 +1658,7 @@ void expected<T, E>::swap(expected<T, E>& rhs) noexcept(/*see below*/);
 
 
 \begin{wordingTextItem}{Effects}
-if \cpp{*this} is valued and \cpp{rhs} is exceptional, initializes the contained value of \cpp{rhs} by direct-initialization with \cpp{std::move(*(*this))}, followed by \cpp{val->T::~T()}, \cpp{swap(init, rhs.init)}, otherwise \\
+if \cpp{*this} is valued and \cpp{rhs} is unexpected, initializes the contained value of \cpp{rhs} by direct-initialization with \cpp{std::move(*(*this))}, followed by \cpp{val->T::~T()}, \cpp{swap(init, rhs.init)}, otherwise \\
 if \cpp{*this} is disengaged and \cpp{rhs} is engaged, initializes the contained value of \cpp{*this} by direct-initialization with \cpp{std::move(*rhs)}, followed by \cpp{rhs.val->T::~T()}, \cpp{swap(init, rhs.init)}, otherwise \\
 if both \cpp{*this} and \cpp{rhs} are engaged) calls \cpp{swap(*(*this), *rhs)}. 
 \end{wordingTextItem}
@@ -1810,13 +1869,9 @@ namespace experimental {
     expected(expected&&) noexcept(see below);
     constexpr explicit expected(in_place_t);     
       
-    constexpr expected(exceptional_t, const E&);
-    constexpr expected(exceptional_t, E&&);
-    template <class... Args> 
-      constexpr explicit expected(exceptional_t, in_place_t, Args&&...);
-    template <class U, class... Args>
-      constexpr explicit expected(exceptional_t, in_place_t,
-                                  initializer_list<U>, Args&&...);
+    constexpr expected(unexpected<E> const&);
+    template <class Err> 
+    constexpr expected(unexpected<Err> const&);
 
     // \ref{expected.object.dtor}, destructor
     ~expected();
@@ -1849,16 +1904,37 @@ namespace experimental {
 \end{lstlisting}
 
 
-\wordingSubSec{Exceptional construction}{expected.exceptional}
+\wordingSubSec{Unexpected object type}{expected.exceptional}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% Exceptional constructor
+% unexpected object type
 \begin{lstlisting}
-struct exceptional_t{}; 
-constexpr exceptional_t exceptional{};
+template <class E=std::exception_ptr>
+class unexpected {
+public:
+    constexpr unexpected();
+    constexpr unexpected(E&);   
+    constexpr unexpected(E&&);
+    template <class... Args> 
+      constexpr explicit expected(in_place_t, Args&&...);
+    template <class U, class... Args>
+      constexpr explicit expected(in_place_t,
+                                  initializer_list<U>, Args&&...);
+}; 
+
+template <>
+struct unexpected<std::exception_ptr> {
+    constexpr unexpected();
+    constexpr unexpected(std::exception_ptr);
+    template <class E>
+      constexpr unexpected(E&);
+    template <class E>
+      constexpr unexpected(E&&);
+
+}; 
+
 \end{lstlisting}
 \noindent
-The \cpp{struct exceptional_t} is an empty structure type used as a unique type to disambiguate constructor and function overloading. Specifically, \cpp{expected<T, E>} has a constructor with \cpp{exceptional_t} as the first argument followed by an E; this indicates that \cpp{expected<T, E>} should be constructed as exceptional. 
 
 
 \wordingSubSec{Class bad_expected_access}{expected.bad_expected_access}
@@ -1873,7 +1949,7 @@ namespace std {
   };
 }
 \end{lstlisting}
-The class \cpp{bad_expected_access} defines the type of objects thrown as exceptions to report the situation where an attempt is made to access the value of a exceptional expected object.
+The class \cpp{bad_expected_access} defines the type of objects thrown as exceptions to report the situation where an attempt is made to access the value of a unexpected expected object.
 
 % constructor with string message.
 \begin{lstlisting}[xleftmargin=0pt]
@@ -1952,7 +2028,7 @@ constexpr expected<T> make_expected_from_error(std::exception_ptr v);
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
-\cpp{expected<T>(exceptional, std::forward<E>(v))}.
+\cpp{expected<T>(unexpected(std::forward<E>(v)))}.
 \end{wordingTextItem}
 \end{wordingPara}
 
