@@ -205,6 +205,70 @@ The main enhancements or differences of the proposed \cpp{expected<T,E>} respect
 \section{Use cases}
 %%%%%%%%%%
 
+\subsection{Parse int}
+%%%%%%%%%%%
+
+Let me start with the example from Alexandrescu presentation.
+
+\begin{lstlisting}
+  expected<int> parseInt(const std::string& s) {
+    int result;
+    //...
+    if (nonDigit)  
+      return make_unexpected(std::invalid_argument("not a number"));
+    //...
+    if (tooManyDigits) 
+      return make_unexpected(std::out_of_range("overflow"));
+    //...
+    return result;
+  }
+
+The make_unexpected factory builds an unexpected<E> object that is implicitly convertible toy expected<T,E>.
+
+  // Caller
+  std::string s = readline();
+  auto x = parseInt(s).value(); // throw on error
+  auto y = parseInt(s); // won't throw
+  if (!y.valid()) {
+    // handle locally
+    if (y.has_exception<std::invalid_argument>()) {
+      // no digits
+      //...
+    }
+    y.value(); // just "re"throw the stored exception
+  }
+\end{lstlisting}
+
+Next follows the \cpp{parseInt} function using a specific error instead of an exception.
+
+\begin{lstlisting}
+  expected<int, myerrc> parseInt(const std::string& s)  {
+    int result;
+    //...
+    if (nonDigit)  
+      return make_unexpected(myerrc::non_digit);
+    //...
+    if (tooManyDigits)  
+      return make_unexpected(myerrc::overflow);
+    //...
+    return make_expected(result);
+  }
+
+  // Caller
+  std::string s = readline();
+  auto x = parseInt(s).value(); // throws bad_exected_access(y.error()) on error
+  auto y = parseInt(s); // won't throw
+  if (!y.valid()) {
+    // handle locally
+    if (y.error() == std::errc::invalid_argument)  {
+      // no digits
+      //...
+    }
+    y.value(); // just throws bad_exected_access(y.error())
+  }
+\end{lstlisting}
+
+
 \subsection{Safe division}
 %%%%%%%%%%%
 
@@ -322,7 +386,6 @@ int f2(int i, int j, int k)
 
 Before I show you the expected<> version of this function, I want to rewrite the function f slightly:
 
-
 \begin{lstlisting}
 int f2(int i, int j, int k)
 {
@@ -391,7 +454,7 @@ boost::expected<int> f(int i, int j, int k)
 }
 \end{lstlisting}
 
-We can also compose all the expected values using the when_all function.
+We can also compose all the expected values using the \cpp{when_all} function.
 
 \begin{lstlisting}
 boost::expected<int> f(int i, int j, int k)
@@ -445,66 +508,100 @@ boost::expected<int> f2(int i, int j, int k)
 which is the cleaner we can get at the expenses of defining the \cpp{operator+}.
 
 
-\subsection{Parse int}
-%%%%%%%%%%%
-
-\begin{lstlisting}
-  expected<int> parseInt(const std::string& s) {
-    int result;
-    //...
-    if (nonDigit)  
-      return make_unexpected(std::invalid_argument("not a number"));
-    //...
-    if (tooManyDigits) 
-      return make_unexpected(std::out_of_range("overflow"));
-    //...
-    return make_expected(result);
-  }
-
-  // Caller
-  std::string s = readline();
-  auto x = parseInt(s).value(); // throw on error
-  auto y = parseInt(s); // won't throw
-  if (!y.valid()) {
-    // handle locally
-    if (y.has_exception<std::invalid_argument>()) {
-      // no digits
-      //...
-    }
-    y.value(); // just "re"throw the stored exception
-  }
-\end{lstlisting}
-
-Next follows the \cpp{parseInt} function using a specific error.
-
-\begin{lstlisting}
-  expected<int, myerrc> parseInt(const std::string& s)  {
-    int result;
-    //...
-    if (nonDigit)  
-      return make_unexpected(myerrc::non_digit);
-    //...
-    if (tooManyDigits)  
-      return make_unexpected(myerrc::overflow);
-    //...
-    return make_expected(result);
-  }
-
-  // Caller
-  std::string s = readline();
-  auto x = parseInt(s).value(); // throws bad_exected_access(y.error()) on error
-  auto y = parseInt(s); // won't throw
-  if (!y.valid()) {
-    // handle locally
-    if (y.error() == std::errc::invalid_argument)  {
-      // no digits
-      //...
-    }
-    y.value(); // just throws bad_exected_access(y.error())
-  }
-\end{lstlisting}
-
 \subsection{Getting an int range}
+
+The next use case show how expected scales and compose. 
+
+Given a function that gets an int \cpp{getInt} and one that matches a string \cpp{matchesString}, how to define a function that parses an int range"<int>..<int>" \cpp{getIntRange}
+
+Next follows the Standard IO facet style to get an int from a stream (only the iterators are show)
+
+\begin{lstlisting}
+template <typename InputIterator>
+  InputIterator getInt(InputIterator s, InputIterator end, errc& err, int& t);
+\end{lstlisting}
+
+In addition to manage with the Iterators, the function changes the error and the int value itself. Let me start by defining the function as if the functions throw an exception when there is an error and make use of an hypothetic istream_range class that would encapsulate the iterators. 
+
+\begin{lstlisting}
+template <typename InputIterator>
+  int getInt(istream_range& r);
+template <typename InputIterator>
+  void matchesString(string, istream_range& r);
+\end{lstlisting}
+
+The get int range could be defined as
+
+\begin{lstlisting}
+template <class InputIterator>
+  pair<int,int> getIntRange(istream_range& r) {
+    auto f = getInt(r);
+    matchesString("..", r).
+    auto l = getInt(r);       
+    return make_pair(f, l);
+}
+\end{lstlisting}
+
+Clearly this is quite clean. However, when exceptions are not desirable, \cpp{expected<>} comes into play. 
+The signature of \cpp{getInt} ,  \cpp{matchesString} and \cpp{getIntervalInt} using \cpp{expected}, could be 
+
+\begin{lstlisting}
+  expected<pair<int, int>, errc> getInt(istream_range& r);
+  expected<void, errc> matchesString(istream_range& r);
+  expected<pair<int, int>, errc> getIntervalInt(istream_range& r);
+\end{lstlisting}
+
+But, how to define \cpp{getIntervalInt}. Let me start by the basic solution
+
+\begin{lstlisting}
+expected<pair<int, int>, errc> getIntervalInt(istream_range& r) {
+  auto  f = getInt(r);
+  if (! f) return f.get_unexpected();
+
+  auto  m = matchedString("..", r);
+  if (! m) return m.get_unexpected();
+
+  auto  l = getInt(r);
+  if (! l) return l.get_unexpected();
+
+  return std::make_pair(*f, *l);
+}
+\end{lstlisting}
+
+The preceding approach while simple contains additional control flow respect to the exception based solution. An alternative using a continuation passing style follows
+
+\begin{lstlisting}
+expected<pair<int, int>, errc> getIntervalInt(istream_range& r) {
+  return getInt(r)
+   .then( [&r](int f){ return matchedString("..", r).then([f]() { return f; }); }
+  ).then( [&r](int f){ return getInt(r).then([f](int l) { return std::make_pair(f,l); }); }
+  );
+}
+\end{lstlisting}
+
+While the control flow has disappeared, the continuation passing style force to capture a lot of variables. The expression could be simplified if we make use of some functors as identity that returns always its parameter and pair_1st that returns a pair build with the constructor parameter and the continuation parameter.
+
+\begin{lstlisting}
+expected<pair<int, int>, errc> getIntervalInt(istream_range& r) {
+  return getInt(r)
+   .then( [&r](int f){ return matchedString("..", r).then( identity(f)); }
+  ).then( [&r](int f){ return getInt(r).then( pair_1st(f)); }
+  );
+}
+\end{lstlisting}
+
+Having a good functor library could help, but with the not yet proposed expect operator this would be a little bit simpler
+
+\begin{lstlisting}
+expected<pair<int, int>, errc> getIntervalInt(istream_range& r) {
+  auto  f = expect getInt(r);
+            expect matchedString("..", r);
+  auto  l = expect getInt(r);
+  return std::make_pair(f, l);
+}
+\end{lstlisting}
+
+\subsection{Getting an int range - To be removed as too complex}
 %%%%%%%%%%%%%%
 
 The next use case show how expected scales and compose. 
@@ -859,9 +956,26 @@ It is possible to make it default constructible adding an additional \cpp{init} 
 \subsection{Observers}
 %%%%%%%%%%%%
 
+In order to be as efficient as possible, this proposal includes narrow and wide observers. Thus, the value() function has a wide contract. If the expected object doesn't contains a value an exception is throw. However, when the user know that the expected object is valid, the use of \cpp{operator*} would be more appropriated. 
 
 \subsection{Monad}
 %%%%%%%%%%
+
+Instead of having a \cpp{.then()} function that accepts a continuation having the expected object as parameter, the proposal includes two separated functions, one \cpp{.then()} that applies when the expected object is valid and accepts a continuation having the underlying type as parameter. The other \cpp{.recover()} applies when the expected object is not valid and is used to try to recover from the error.  
+
+An alternative could be to have a single \cpp{.then()} function as it is the case for future proposal and have some functors succeed and recover that do the adaptation.
+
+\begin{lstlisting}
+f.then(success([](T v) {...}));
+
+f.then(recover([](E e) {...}));
+\end{lstlisting}
+
+\subsection{When all}
+%%%%%%%%%%
+
+The type returned by \cpp{when_all} applied on \cpp{expected<T,E>} differs from the one applied to  \cpp{future<T>}. The result is a container of expected. No need to nest the expected as 
+
 
 
 \section{Related work}
@@ -871,6 +985,41 @@ It is possible to make it default constructible adding an additional \cpp{init} 
 %%%%%%%%%%%%%%%%%%%%
 
 \cpp{expected<T,E>} can be seen as a specialization of a possible \cpp{either<T,E>} or \cpp{boost::variant<T,E>} which gives a specific intent to its first parameter, that is, it represent the type of the expected contained value. This specificity allows to provide a pointer like interface, as it is the case for \cpp{std::experimental::optional<T>}. Even if the standard contained a class \cpp{either<T,E>} or \cpp{variant<T,E>}, the interface provided by expected<T,E> is more specific and closer to what the user could expect as the result type of a function. In addition, \cpp{expected<T,E>} doesn't intend to be used to define recursive data as \cpp{boost::variant<>} does.
+
+The table \ref{comp-variant} presents a brief comparison between \cpp{boost::variant<T, E>} and \cpp{expected<T,E>}.
+
+\begin{table}
+\bgroup
+\def\arraystretch{1.5}
+\begin{tabular}
+{|l|>{\raggedright\arraybackslash}p{6cm}|>{\raggedright\arraybackslash}p{6cm}|}
+\hline
+                    & \textbf{boost::variant<T, E>} & \textbf{expected<T,E>}  \\
+\hline
+\textbf{non-empty warranty} & yes & yes \\
+\hline
+\textbf{accepts is_same<T,E>} & no & yes \\
+\hline
+\textbf{swap} & yes & yes \\
+\hline
+\textbf{factories} & no & make_expected / make_unexpected  \\
+\hline
+\textbf{hash} & yes & yes  \\
+\hline
+\textbf{value_type} & no & yes  \\
+\hline
+\textbf{default constructor} & yes (if T is default constructible) & yes (if T is default constructible)  \\
+\hline
+\textbf{observers} & boost::get<T> and boost::get<E> & pointer-like / value / error / value_or / value_or_throw \\
+\hline
+\textbf{continuations} & apply_visitor & then/next/recover  \\
+\hline
+\end{tabular}
+\egroup
+\caption{Comparison between variant and expected.}
+\label{comp-variant}
+\end{table}
+
 
 \subsection{Optional}
 %%%%%%%%%%%
@@ -885,13 +1034,13 @@ optional<T> optionalCast(expected<T,E> v) {
 }
 \end{lstlisting}
 
-We can convert an \cpp{optional<T>} to an \cpp{expected<T>} with the possible loss of the root cause.
+We can convert an \cpp{optional<T>} to an \cpp{expected<T>} without knowledge of the root cause.
 
 \begin{lstlisting}
 template <class T>
-expected<T> expectedCast(optional<T>) {
+expected<T> expectedCast(optional<T> v) {
   if (v.valid()) return make_expected(*v);
-  else expected<T>::from_error();
+  else make_unexpected(exception_ptr());
 }
 \end{lstlisting}
 
@@ -907,9 +1056,9 @@ template <class T>
 expected<T> expectedCast(future<T>&& f) {
   assert (f.ready() && "future not ready");
   if (! f.valid()) 
-    return expected<T>::from_error(getExceptionPtr(f)); // (1)
+    return make_unexpected(getExceptionPtr(f)); // (1)
   else 
-    return make_expected(f.value());
+    return make_expected(f.get());
 }
 \end{lstlisting}
 
@@ -928,16 +1077,16 @@ We can create also a \cpp{future<T>} from an \cpp{expected<T>}.
 template <class T>
 future<T> make_ready_future(expected<T>&& e) {
   if (e.valid()) 
-    return make_ready_future(e.value();
+    return make_ready_future(*e);
   else 
-    return make_exceptional_future(f.error()); // (2)
+    return make_exceptional(e.error()); // (2)
 }
 \end{lstlisting}
 
-Remark: line (2) uses Boost.Thread provides
+Remark: line (2) uses Boost.Thread make_exceptional function.
 
 \begin{lstlisting}
-future<T> make_exceptional_future(exception_ptr ex);
+exceptional_ptr make_exceptional(exception_ptr ex);
 \end{lstlisting}
 
 
@@ -945,7 +1094,7 @@ future<T> make_exceptional_future(exception_ptr ex);
 %%%%%%%%%%%%%%%
 
 As for the \cpp{future<T>} proposal, \cpp{expected<T,E>} provides also a way to visit the stored values.
-\cpp{future<T>} provides a \cpp{then()} function that accepts a continuation having the \cpp{future<T>} as parameter. The synchronous nature of expected makes it more appropriated to use two functions, one to manage with the case expected has a value and one to try to recover otherwise. This is more in line with the monad interface, as any function having a \cpp{T} as parameter can be used as parameter of the apply function, no need to have a \cpp{expected<T>}. This make it easier to reuse functions. 
+\cpp{future<T>} provides a \cpp{then()} function that accepts a continuation having the \cpp{future<T>} as parameter. The synchronous nature of expected makes it easier to use two functions, one to manage with the case expected has a value and one to try to recover otherwise. This is more in line with the monad interface, as any function having a \cpp{T} as parameter can be used as parameter of the apply function, no need to have a \cpp{expected<T>}. This make it easier to reuse functions. 
 
 \begin{itemize}
  \item \cpp{expected<T,E>::next()}/\cpp{expected<T,E>::recover()} are the counterpart of \cpp{future<T>.then()}
@@ -971,7 +1120,7 @@ The table \ref{comp-monads} presents a brief comparison between \cpp{optional<T>
 \hline
 \textbf{swap} & yes & yes & yes \\
 \hline
-\textbf{factories} & make_optional / nullopt & make_expected / make_expected_from_call / make_expected_from_error & make_ready_future / (make_expected_from_error, see \cite{MoreAsync}) \\
+\textbf{factories} & make_optional / nullopt & make_expected / make_unexpected & make_ready_future / (make_exceptional, see \cite{MoreAsync}) \\
 \hline
 \textbf{hash} & yes & yes & yes \\
 \hline
@@ -989,7 +1138,9 @@ The table \ref{comp-monads} presents a brief comparison between \cpp{optional<T>
 \hline
 \textbf{observers} & pointer-like / value / value_or & pointer-like / value / error / value_or / value_or_throw & get / (get_exception_ptr, see \cite{MoreAsync}) \\
 \hline
-\textbf{continuations} & no & then/next/recover / if_all / if_any & then/ when_all / when_any / (next/recover see \cite{MoreAsync}) \\
+\textbf{continuations} & no & then/next/recover  & then / (next/recover see \cite{MoreAsync}) \\
+\hline
+\textbf{grouping} & no & when_all / when_any & when_all / when_any \\
 \hline
 \end{tabular}
 \egroup
