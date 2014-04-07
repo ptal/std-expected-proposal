@@ -205,70 +205,6 @@ The main enhancements or differences of the proposed \cpp{expected<T,E>} respect
 \section{Use cases}
 %%%%%%%%%%
 
-\subsection{Parse int}
-%%%%%%%%%%%
-
-Let me start with the example from Alexandrescu presentation.
-
-\begin{lstlisting}
-  expected<int> parseInt(const std::string& s) {
-    int result;
-    //...
-    if (nonDigit)  
-      return make_unexpected(std::invalid_argument("not a number"));
-    //...
-    if (tooManyDigits) 
-      return make_unexpected(std::out_of_range("overflow"));
-    //...
-    return result;
-  }
-
-The make_unexpected factory builds an unexpected<E> object that is implicitly convertible toy expected<T,E>.
-
-  // Caller
-  std::string s = readline();
-  auto x = parseInt(s).value(); // throw on error
-  auto y = parseInt(s); // won't throw
-  if (!y.valid()) {
-    // handle locally
-    if (y.has_exception<std::invalid_argument>()) {
-      // no digits
-      //...
-    }
-    y.value(); // just "re"throw the stored exception
-  }
-\end{lstlisting}
-
-Next follows the \cpp{parseInt} function using a specific error instead of an exception.
-
-\begin{lstlisting}
-  expected<int, myerrc> parseInt(const std::string& s)  {
-    int result;
-    //...
-    if (nonDigit)  
-      return make_unexpected(myerrc::non_digit);
-    //...
-    if (tooManyDigits)  
-      return make_unexpected(myerrc::overflow);
-    //...
-    return make_expected(result);
-  }
-
-  // Caller
-  std::string s = readline();
-  auto x = parseInt(s).value(); // throws bad_exected_access(y.error()) on error
-  auto y = parseInt(s); // won't throw
-  if (!y.valid()) {
-    // handle locally
-    if (y.error() == std::errc::invalid_argument)  {
-      // no digits
-      //...
-    }
-    y.value(); // just throws bad_exected_access(y.error())
-  }
-\end{lstlisting}
-
-
 \subsection{Safe division}
 %%%%%%%%%%%
 
@@ -279,8 +215,8 @@ struct DivideByZero: public std::exception {...};
 
 int safe_divide(int i, int j)
 {
-  if (j==0) throw (DivideByZero());
-  else return i/j;
+  if (j==0) throw DivideByZero();
+  else return i / j;
 }
 \end{lstlisting}
 
@@ -288,44 +224,57 @@ int safe_divide(int i, int j)
 Using \cpp{expected<int>}
 
 \begin{lstlisting}
-expected<int> safe_divide(int i, int j)
+expected<int> safe_divide(int i, int j) noexcept
 {
   if (j==0) return make_unexpected(DivideByZero()); // (1)
   else return i / j; // (2)
 }
 \end{lstlisting}
 
-(1) uses un implicit conversion from unexpected<E> to expected<T,E>. 
-
-(2) uses un implicit conversion from T to expected<T,E>.
-
-The advantages are that we have a clean way to say that a function has failed without using the exception machinery, and we can give precise information about why it failed as well. The liability is that this function is going to be tedious to use. For instance, the exception based function:
+(1) The implicit conversion from \cpp{unexpected_type<E>} to \cpp{expected<T,E>} and (2) the one from \cpp{T} to \cpp{expected<T,E>} prevents using too much boilerplate code. The advantages are that we have a clean way to fail without using the exception machinery, and we can give precise information about why it failed as well. The liability is that this function is going to be tedious to use. For instance, the exception based function:
 
 \begin{lstlisting}
 int f1(int i, int j, int k)
 {
-  return i+ safe_divide(j,k);
+  return i + safe_divide(j,k);
 }
 \end{lstlisting}
 
-becomes using expected<int> 
+\noindent
+becomes using \texttt{expected<int>}
 
 \begin{lstlisting}
-expected<int> ex_f1(int i, int j, int k)
+expected<int> f1(int i, int j, int k)
 {
-  auto q2 = safe_divide(j, k);
-  if (! q2.valid()) return q2.get_unexpected(); // (1)
-  return i + q2.get_value(); // (2)
+  auto q = safe_divide(j, k)
+  if(q.valid()) return i + *q;
+  else return q;
 }
 \end{lstlisting}
 
-(1) When safe_divide fails we forward the unexpected value.
+\noindent
+But \cpp{expected<T>} delivers cleaner code when used in a functional style:
 
-(2) Here we know that q2 has a valid value.
+\begin{lstlisting}
+expected<int> f1(int i, int j, int k)
+{
+  return safe_divide(j, k).next([&](int q){
+    return i + q;
+  });
+}
+\end{lstlisting}
 
-This is pretty complicated considering what we are trying to do. In addition, the return type expected<int> is different from the input types (which are all ints), so it's going to be hard to compose functions which return these \cpp{expected<>} values with functions that don't. But let's press on for now and deal with those problems later.
+The \cpp{next} members calls the continuation provided if expected contains a value, otherwise it forwards the error to the callee. Using lambda function might cluttered the code, so here an example using functor:
 
-We can use \cpp{expectd<T>} to represent different error conditions. For instance, with integer division, we might want to fail if the two numbers are not evenly divisible as well as checking for division by zero. We can improve our safe_divide function accordingly:
+\begin{lstlisting}
+expected<int> f1(int i, int j, int k)
+{
+  return safe_divide(j, k)
+    .next(bind(plus, i, _1));
+}
+\end{lstlisting}
+
+We can use \cpp{expected<T>} to represent different error conditions. For instance, with integer division, we might want to fail if the two numbers are not evenly divisible as well as checking for division by zero. We can improve our \cpp{safe_divide} function accordingly:
 
 \begin{lstlisting}
 struct NotDivisible: public std::exception
@@ -342,8 +291,7 @@ expected<int> safe_divide(int i, int j)
 }
 \end{lstlisting}
 
-Now we have a division function for integers that can handle two error conditions. However, it's not easy to write code which detects which of the two conditions occurred. For instance, we might have situations where dividing two integers which are not evenly divisible is OK (we just throw away the remainder) but division by zero is probably never going to be OK. Let's try to write this using our safe_divide function, first using exceptions
-
+Now we have a division function for integers that possibly fail in two ways. However, it's not easy to write code that detect which of the two conditions occurred. For instance, we might have situations where dividing two integers which are not evenly divisible is OK (we just throw away the remainder) but division by zero is probably never going to be OK. Let's try to write this using our safe_divide function, first using exceptions:
 
 \begin{lstlisting}
 T divide(T i, T j)
@@ -363,19 +311,22 @@ T divide(T i, T j)
 }
 \end{lstlisting}
 
-and then using \cpp{expect<>}
+\noindent
+and then using \cpp{expected<T>}
 
 \begin{lstlisting}
-boost::expected<int> divide(int i, int j)
+expected<int> divide(int i, int j)
 {
-  auto r =  safe_divide(i,j);
-  if (r.has_exception<NotDivisible>()) return i / j;
-  return  r;
+  auto e = safe_divide(i,j);
+  if(has_unexpected<NotDivisible>(e))
+    return i/j;
+  else 
+    return e;
 }
 \end{lstlisting}
 
-
-Lets continue with this very simple function on integers:
+\noindent
+Lets continue with the exception-oriented function $i/k + j/k$:
 
 \begin{lstlisting}
 int f2(int i, int j, int k)
@@ -384,36 +335,23 @@ int f2(int i, int j, int k)
 }
 \end{lstlisting}
 
-Before I show you the expected<> version of this function, I want to rewrite the function f slightly:
+\noindent
+Now let's write this code using an \cpp{expected<T>} type and an imperative flavour:
 
 \begin{lstlisting}
-int f2(int i, int j, int k)
-{
-  auto s1 = safe_divide(i,k);
-  auto s2 = safe_divide(j,k);
-  return s1 + s2;
-}
-\end{lstlisting}
-
-
-Now let's write this code using an expected<int> type. We get this:
-
-\begin{lstlisting}
-boost::expected<int> f2(int i, int j, int k)
+expected<int> f2(int i, int j, int k)
 {
   auto eq1 = safe_divide(i, k);
-  if (!eq1.valid()) return eq1.get_unexpected();
-  auto q1 = *eq1;
+  if (!eq1.valid()) return eq1;
 
   auto eq2 = safe_divide(j, k);
-  if (!eq2.valid()) return eq2.get_unexpected();
-  auto q2 = *eq2;
+  if (!eq2.valid()) return eq2;
 
-  return q1 + q2;
+  return *q1 + *q2;
 }
 \end{lstlisting}
 
-This is nice in the sense that whenever there is an error (as we have defined it) we get a specific error result. Now let's rewrite this using a possible C++ language extension:
+This is nice in the sense that whenever there is an error we get a specific error result. Now let's rewrite this using a possible C++ language extension:
 adding a expect operator, something similar to the await extension for futures.  The meaning of expect expr is:
 
 \begin{itemize}
