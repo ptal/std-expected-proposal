@@ -598,6 +598,7 @@ In order to be as efficient as possible, this proposal includes narrow and wide 
 
 \subsection{Monad}
 %%%%%%%%%%
+\todo{update to latest monad interface or keep it for another proposal?}
 
 Instead of having a \cpp{.then()} function that accepts a continuation having the expected object as parameter, the proposal includes two separated functions, one \cpp{.then()} that applies when the expected object is valid and accepts a continuation having the underlying type as parameter. The other \cpp{.recover()} applies when the expected object is not valid and is used to try to recover from the error.  
 
@@ -608,13 +609,6 @@ f.then(success([](T v) {...}));
 
 f.then(recover([](E e) {...}));
 \end{lstlisting}
-
-\subsection{When all}
-%%%%%%%%%%
-
-The type returned by \cpp{when_all} applied on \cpp{expected<T,E>} differs from the one applied to  \cpp{future<T>}. The result is a container of expected. No need to nest the expected as 
-
-
 
 \section{Related work}
 %%%%%%%%%%%
