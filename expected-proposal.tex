@@ -13,16 +13,16 @@
 \usepackage{underscore}
 \usepackage{changepage}   % for the adjustwidth environment
 
-\hypersetup{
-  hidelinks
-}
-
 \usepackage[top=2cm, bottom=2cm, left=2cm, right=2cm]{geometry}
 
 \usepackage{color}
 \usepackage{textpos}
 \usepackage{titling}
 \usepackage{titlesec}
+
+% \hypersetup{
+%   hidelinks
+% }
 
 \setcounter{secnumdepth}{6}
 
@@ -122,6 +122,7 @@
 Class template \cpp{expected<T,E>} proposed here is a type that may contain a value of type \cpp{T} or a value of type \cpp{E} in its storage space. \cpp{T} represents the expected value, \cpp{E} represents the reason explaining why it doesn't contains a value of type \cpp{T}, that is the unexpected value. Its interface allows to query if the underlying value is either the expected value (of type \cpp{T}) or an unexpected value (of type \cpp{E}). The original idea comes from Andrei Alexandrescu C++ and Beyond 2012: Systematic Error Handling in C++ talk \cite{AlexandrescuExpected}. The interface is based on \cpp{std::optional} N3793 \cite{OptionalRev5} and Haskell monads. It requires no changes to core language, and breaks no existing code.
 
 \section{Motivation and Scope}
+\label{motiv-scope}
 %%%%%%%%%%%%%%%%
 
 Basically, the two main error mechanisms are exceptions and return codes. Before further explanation, we should ask us what are the characteristics of a good error mechanism.
@@ -208,7 +209,7 @@ The main enhancements or differences of the proposed \cpp{expected<T,E>} respect
 \subsection{Safe division}
 %%%%%%%%%%%
 
-Using exceptions, we can define a version of integer division that checks for divide-by-zero conditions, we might write something like this:
+This first example shows how to define a safe divide operation checking for divide-by-zero conditions. Using exceptions, we might write something like this:
 
 \begin{lstlisting}
 struct DivideByZero: public std::exception {...};
@@ -221,7 +222,7 @@ int safe_divide(int i, int j)
 \end{lstlisting}
 
 \noindent
-Using \cpp{expected<int>}
+Which, using \cpp{expected<int>}, turns to:
 
 \begin{lstlisting}
 expected<int> safe_divide(int i, int j) noexcept
@@ -231,7 +232,7 @@ expected<int> safe_divide(int i, int j) noexcept
 }
 \end{lstlisting}
 
-(1) The implicit conversion from \cpp{unexpected_type<E>} to \cpp{expected<T,E>} and (2) the one from \cpp{T} to \cpp{expected<T,E>} prevents using too much boilerplate code. The advantages are that we have a clean way to fail without using the exception machinery, and we can give precise information about why it failed as well. The liability is that this function is going to be tedious to use. For instance, the exception based function:
+(1) The implicit conversion from \cpp{unexpected_type<E>} to \cpp{expected<T,E>} and (2) from \cpp{T} to \cpp{expected<T,E>} prevents using too much boilerplate code. The advantages are that we have a clean way to fail without using the exception machinery, and we can give precise information about why it failed as well. The liability is that this function is going to be tedious to use. For instance, the exception based function:
 
 \begin{lstlisting}
 int f1(int i, int j, int k)
@@ -241,7 +242,7 @@ int f1(int i, int j, int k)
 \end{lstlisting}
 
 \noindent
-becomes using \texttt{expected<int>}
+becomes using \texttt{expected<int>}:
 
 \begin{lstlisting}
 expected<int> f1(int i, int j, int k)
@@ -253,7 +254,7 @@ expected<int> f1(int i, int j, int k)
 \end{lstlisting}
 
 \noindent
-But \cpp{expected<T>} delivers cleaner code when used in a functional style:
+However \cpp{expected<T>} delivers cleaner code when used in a functional style:
 
 \begin{lstlisting}
 expected<int> f1(int i, int j, int k)
@@ -312,7 +313,7 @@ T divide(T i, T j)
 \end{lstlisting}
 
 \noindent
-and then using \cpp{expected<T>}
+and then using \cpp{expected<T>}:
 
 \begin{lstlisting}
 expected<int> divide(int i, int j)
@@ -341,125 +342,54 @@ Now let's write this code using an \cpp{expected<T>} type and an imperative flav
 \begin{lstlisting}
 expected<int> f2(int i, int j, int k)
 {
-  auto eq1 = safe_divide(i, k);
-  if (!eq1.valid()) return eq1;
+  auto q1 = safe_divide(i, k);
+  if (!q1.valid()) return q1;
 
-  auto eq2 = safe_divide(j, k);
-  if (!eq2.valid()) return eq2;
+  auto q2 = safe_divide(j, k);
+  if (!q2.valid()) return q2;
 
   return *q1 + *q2;
 }
 \end{lstlisting}
 
-This is nice in the sense that whenever there is an error we get a specific error result. Now let's rewrite this using a possible C++ language extension:
-adding a expect operator, something similar to the await extension for futures.  The meaning of expect expr is:
-
-\begin{itemize}
- \item if the expected expr is not valid return with its unexpected value,
- \item otherwise store the value for further evaluation.
-\end{itemize}
+This is nice in the sense that whenever there is an error we get a specific error result. However the ``clean code'' characteric introduced in section \ref{motiv-scope} is not well-respected as the readability doesn't differ much from the ``C return code''. We can rewrite this using a continuation passing style as follows:
 
 \begin{lstlisting}
-boost::expected<int> g2(int i, int j, int k)
+expected<int> f(int i, int j, int k)
 {
-  return expect safe_divide(i,k) + expect safe_divide(j,k);
-}
-\end{lstlisting}
-
-or 
-
-\begin{lstlisting}
-boost::expected<int> g2(int i, int j, int k)
-{
-  auto q1 = expect safe_divide(i,k);
-  auto q2 = expect safe_divide(j,k);
-  return q1 + q2;
-}
-\end{lstlisting}
-
-This would give the exact same results as the previous version. However, the function \cpp{g2} is much simpler and clearer than \cpp{f2} because it doesn't have to explicitly handle any of the error cases. When an error case occurs, it is returned as the result of the function, but if not, the correct result of a subexpression is bound to a name (q1 or q2), and that result can be used in later parts of the computation. The code is a lot simpler to write. The more complicated the error-handling function, the more important this will be.
-
-But, we don't have this except extension yet. We can rewrite this without using the expect-extension and using a continuation passing style as follows:
-
-\begin{lstlisting}
-boost::expected<int> f(int i, int j, int k)
-{
-  return safe_divide(i, k).then([=](int q1)    {
-      return safe_divide(j,k).then([=](int q2)  {
+  return safe_divide(i, k).then([=](int q1) {
+      return safe_divide(j,k).then([=](int q2) {
         return q1+q2;
       });
     });
 }
 \end{lstlisting}
 
-We can also compose all the expected values using the \cpp{when_all} function.
+The error-handling code has completely disappeared but the continuations are a new source of noise, and this is even more important with $n$ expected variables. A cleaner solution uses the variadic free function \cpp{mbind}\footnote{\cpp{mbind} stands for ``monadic bind''.}:
 
 \begin{lstlisting}
-boost::expected<int> f(int i, int j, int k)
+expected<int> f(int i, int j, int k)
 {
-  return when_all(safe_divide(i, k), safe_divide(j,k)).then(add);
+  return mbind(plus,
+    safe_divide(i, k), 
+    safe_divide(j,k));
 }
 \end{lstlisting}
 
-
-Waiting for a expect-extension the user could define a macro
-
-\begin{lstlisting}
-#define EXPECT(V, EXPR) \
-auto BOOST_JOIN(expected,V) = EXPR; \
-if (! BOOST_JOIN(expected,V).valid()) return BOOST_JOIN(expected,V).get_unexpected(); \
-auto V =*BOOST_JOIN(expected,V)
-\end{lstlisting}
-
-and define f as
-
-\begin{lstlisting}
-boost::expected<int> f(int i, int j, int k)
-{
-  EXPECT(q1, safe_divide(i,k));
-  EXPECT(q2, safe_divide(j,k));
-  return q1 + q2;
-}
-\end{lstlisting}
-
-Alternatively, if the \cpp{operator+} is defined for \cpp{expected<int>}
-
-\begin{lstlisting}
-template <class T>
-expected<T> operator+(expected<T> i, expected<T> j)
-{
-  EXPECT(i_, i);
-  EXPECT(j_, j);
-  return i_ + j_;
-}
-\end{lstlisting}
-
-the function f2 could be defined as
-
-\begin{lstlisting}
-boost::expected<int> f2(int i, int j, int k)
-{
-  return safe_divide(i, k) + safe_divide(j, k);
-}
-\end{lstlisting}
-
-which is the cleaner we can get at the expenses of defining the \cpp{operator+}.
-
+The function \cpp{mbind} returns the first erroneous expected argument or, if they all contain a value, the result of the ``plus'' operation.
 
 \subsection{Getting an int range}
 
-The next use case show how expected scales and compose. 
+The next use case shows how expected scales and compose. Given the functions \cpp{getInt} and \cpp{matchesString}, how to define a function that parses an int range ``<int>..<int>'' \cpp{getIntRange}?
 
-Given a function that gets an int \cpp{getInt} and one that matches a string \cpp{matchesString}, how to define a function that parses an int range"<int>..<int>" \cpp{getIntRange}
-
-Next follows the Standard IO facet style to get an int from a stream (only the iterators are show)
+Next follows the Standard IO facet style to get an int from a stream (only the iterators are shown):
 
 \begin{lstlisting}
 template <typename InputIterator>
   InputIterator getInt(InputIterator s, InputIterator end, errc& err, int& t);
 \end{lstlisting}
 
-In addition to manage with the Iterators, the function changes the error and the int value itself. Let me start by defining the function as if the functions throw an exception when there is an error and make use of an hypothetic istream_range class that would encapsulate the iterators. 
+In addition to manage with the Iterators, the function changes the error and the int value itself. Let start by defining the function as if the functions throw an exception when there is an error and make use of an hypothetic istream_range class that would encapsulate the iterators. 
 
 \begin{lstlisting}
 template <typename InputIterator>
@@ -539,243 +469,22 @@ expected<pair<int, int>, errc> getIntervalInt(istream_range& r) {
 }
 \end{lstlisting}
 
-\subsection{Getting an int range - To be removed as too complex}
-%%%%%%%%%%%%%%
-
-The next use case show how expected scales and compose. 
-
-Given a function that gets an int \cpp{getInt} and one that matches a string \cpp{matchesString}, how to define a function that parses an int range"<int>..<int>" \cpp{getIntRange}
-
-Next follows the Standard IO facet style to get an int from a stream (only the iterators are show)
-
-\begin{lstlisting}
-template <typename InputIterator>
-  InputIterator getInt(InputIterator s, InputIterator end, errc& err, int& t);
-\end{lstlisting}
-
-In addition to manage with the Iterators, the function changes the error and the int value itself. Let me start by defining the function as if the functions throw an exception when there is an error. Moving to a pure functional style gives.
-
-\begin{lstlisting}
-template <typename InputIterator>
-  pair<InputIterator, int> getInt(InputIterator s, InputIterator end);
-template <typename InputIterator>
-  pair<InputIterator, bool> matchesString(string, InputIterator s, InputIterator end);
-\end{lstlisting}
-
-The get int range could be defined as
-
-\begin{lstlisting}
-template <class InputIterator>
-  pair<InputIterator, pair<int,int>> getIntRange(InputIterator s, InputIterator e) {
-    auto f = getInt(s,e);
-    auto m = matchesString("..", f.first, e).
-    auto l = getInt(m.first,e);       
-    return make_pair(l.first, make_pair(f.second, l.second));
-}
-\end{lstlisting}
-
-Clearly this is quite clean. However, when exceptions are not desirable, \cpp{expected<>} comes into play. 
-The signature of \cpp{getInt} using \cpp{expected}, could be either
-
-\begin{lstlisting}
-template <class InputIterator, class Num>
-  pair<InputIterator, expected<int, errc> get(InputIterator s, InputIterator e);
-\end{lstlisting}
-
-or 
-
-\begin{lstlisting}
-template <class InputIterator, class Num>
-  expected<pair<InputIterator, int>, pair<InputIterator, errc> > get(InputIterator s, InputIterator e);
-\end{lstlisting}
-
-Next we analyze both possibilities and conclude which approach is better adapted.
-
-\subsubsection{Returning pair}
+\subsection{Error retrieval and correction}
 %%%%%%%%%%%%%%%%
 
-So given the following prototypes:
-
-\begin{lstlisting}
-template <class InputIterator>
-  pair<InputIterator, expected<int>> getInt(InputIterator s, InputIterator e);
-template <class InputIterator>
-  pair<InputIterator, expected<void>> matchesString(std::string, InputIterator s, InputIterator e);
-\end{lstlisting}
-
-\noindent
-how to define a function
-
-\begin{lstlisting}
-template <class InputIterator>
-  pair<InputIterator, expected<pair<int,int>>> getIntRange(InputIterator s, InputIterator e);
-\end{lstlisting}
-
-
-One solution consists in checking if there is an error at every step. 
-
-\begin{lstlisting}
-template <class InputIterator>
-  pair<InputIterator, expected<pair<int,int>>> 
-  getIntRange(InputIterator s, InputIterator e) {
-    auto f = getInt(s, e);
-    if (! f.second.valid())  return make_pair(f.first, expected<pair<int,int>>::from_error(f.error()));
-    auto m = matchesString(":", s, e).
-    if (! m.valid())  return make_pair(m.first, expected<pair<int,int>>::from_error(m.error()));
-    auto l = getInt(s, e);
-    if (! l.valid())  return make_pair(l.first, expected<pair<int,int>>::from_error(l.error()));
-        
-    return make_pair(l.first, make_expected(make_pair(f.value(), l.value())));
-}
-\end{lstlisting}
-
-The preceding approach contains too much noise respect to the exception based solution. An alternative is a continuation passing style. 
-
-\begin{lstlisting}
-template <class InputIterator>
-  pair<InputIterator, expected<pair<int,int>>> getIntRange(InputIterator s, InputIterator e) {
-    auto f = getInt(s, e);
-    return f | [e](std::pair<InputIterator,int> f) {
-    	       return matchesString("..", f.first, e); 
-	  }  | [e](std::pair<InputIterator,int> m) {
-               return getInt(m.first, e); 
-	  }  | [f](std::pair<InputIterator,int> l) {
-               return make_pair(l.first, make_expected(make_pair(*f.second, l.second))); 
-	  };
-}
-\end{lstlisting}
-
-Note that the control flow has disappeared but the calls have been wrapped on some lambda expressions. Let me analyze what is behind the scenes. The main point is the definition of the operator|(). 
-
-\begin{lstlisting}
-template <class T, class I, typename E, class F>
-typename std::result_of<F(value_type)>::type type
-operator|(pair_expected<T, I, E> m, F f) {
-    typedef typename std::result_of<F(value_type)>::type result_type;
-    typedef typename result_type::second_type expected_type;
-    if (m.second.valid()) {
-      return f(std::make_pair(m.first, m.second.value()));
-    }
-    return make_pair(m.first, expected_type(m.second.get_unexpected()));
-}
-\end{lstlisting}
-
-If N3559 - Generic (Polymorphic) Lambda Expressions is accepted, the code could be written as
-
-\begin{lstlisting}
-template <class InputIterator>
-  pair<InputIterator, expected<pair<int,int>>> getIntRange(InputIterator s, InputIterator e) {
-    auto f =                        getInt(s, e);
-    return f | [e](auto f) { return matchesString("..", f.first, e); 
-	  }  | [e](auto m) { return getInt(m.first, e); 
-	  }  | [f](auto l) { return make_pair(l.first, make_expected(make_pair(*f.second, l.second))); 
-	  };
-}
-\end{lstlisting}
-
-which is quite close to the exception based solution
-
-\begin{lstlisting}
-template <class InputIterator>
-  pair<InputIterator, pair<int,errc>> getIntRange(InputIterator s, InputIterator e) {
-    auto f = getInt(s,e);
-    auto m = matchesString("..", f.first, e).
-    auto l = getInt(m.first,e);       
-    return make_pair(l.first, make_expected(make_pair(f.second, l.second)));
-}
-\end{lstlisting}
-
-\subsubsection{Returning expected}
-%%%%%%%%%%%%%%%%%%%
-
-So given the following prototypes:
-
-\begin{lstlisting}
-template <class InputIterator>
-  expected<pair<InputIterator, int>, pair<InputIterator, errc> > get(InputIterator s, InputIterator e);
-template <class InputIterator>
-  expected<InputIterator, pair<InputIterator, errc> > matchesString(InputIterator s, InputIterator e);
-\end{lstlisting}
-
-\noindent
-how to define a function
-
-\begin{lstlisting}
-template <class InputIterator, class Num>
-  expected<pair<InputIterator, pair<int, int>, pair<InputIterator, errc> > 
-  get(InputIterator s, InputIterator e);
-\end{lstlisting}
-
-One solution consists in checking if there is an error at every step. 
-
-\begin{lstlisting}
-template <class InputIterator>
-  expected<pair<InputIterator, pair<int, int>, pair<InputIterator, errc> > 
-  getIntRange(InputIterator s, InputIterator e) {
-    auto f = getInt(s, e);
-    if (! f.valid())  return f.get_unexpected();
-    auto m = matchesString(":", f->first, e).
-    if (! m.valid()) return m.get_unexpected();
-    auto l = getInt(*m, e);
-    if (! l.valid()) return l.get_unexpected();
-        
-    return make_pair(l->first, make_pair(f->second, l->second);
-}
-\end{lstlisting}
-
-The preceding approach contains too much noise respect to the exception based solution. An alternative is a continuation passing style. 
-
-\begin{lstlisting}
-template <class InputIterator>
-  expected<pair<InputIterator, pair<int, int>, pair<InputIterator, errc> > 
-  getIntRange(InputIterator s, InputIterator e) {
-    auto f = getInt(s, e);
-    return f | [e](std::pair<InputIterator,int> f) {
-    	       return matchesString("..", f.first, e); 
-	  }  | [e](InputIterator m) {
-               return getInt(m, e); 
-	  }  | [f](std::pair<InputIterator,int> l) {
-               return make_pair(l.first, make_pair(f->second, l.second)); 
-	  };
-}
-\end{lstlisting}
-
-
-\subsection{\todo{Title needed}}
-%%%%%%%%%%%%%%%%
-
-We should wonder what every programmers do when a function call returns an error:
+The major advantage of \cpp{expected<T,E>} over \cpp{optional<T>} is the ability to transport error, but we didn't come yet to an example that retrieve the error. First of all, we should wonder what a programmer do when a function call returns an error:
 
 \begin{enumerate}
- \item Nothing.
+ \item Ignore it.
  \item Delegate the responsibility of error handling to higher layer.
  \item Trying to resolve the error.
 \end{enumerate}
 
-Because the first behavior leads to buggy application, we won't consider it in a first time. Consider the following ``pseudo coded'' mock function:
+Because the first behavior leads to buggy application, we won't consider it in a first time.
 
-\begin{lstlisting}
-EXPECTED int mock_connect(const string& hostname, const string& passwd, bool timed_out){
-  if(passwd != "passwd")
-      return connection refused ERROR
-  else if(hostname != "localhost")
-      return host unreachable ERROR
-  else if(timed_out)
-      return timed out ERROR
-  return HANDLE 0
-}
-\end{lstlisting}
-
-We imagine a scenario where:
-
-\begin{itemize}
- \item The \textit{connection refused} error is resolved by asking the user another password.
- \item The \textit{host unreachable} error is delegated to the upper layer.
- \item The \textit{time out} error is resolved at the next try.
-\end{itemize}
-
-\subsection{Exception-based expected}
+\subsubsection{Exception-based expected}
 %%%%%%%%%%%%%%%%%%%%
+\todo{RECODE this using the latest expected API.}
 
 The code of the mock connect function is below. You can see that the errors are encapsulated into exceptions.
 \begin{lstlisting}
@@ -834,7 +543,7 @@ TODO INSERT CODE
 
 The next section shows how to do the same things with the standard error code (\cpp{std::error_condition}).
 
-\subsection{Error-based expected}
+\subsubsection{Error-based expected}
 %%%%%%%%%%%%%%%%%%
 
 We use the class \cpp{expected_or_error} which looks like the class expected without the exception.
@@ -856,15 +565,6 @@ TODO INSERT CODE
 \end{lstlisting}
 
 We can see that the code is quite similar between both classes. It's mainly because we didn't use the exception facility of the expected class.
-
-\subsection{Result}
-%%%%%%%%%%
-
-The result of the both codes is the same 
-
-\begin{lstlisting}
-TODO INSERT CODE
-\end{lstlisting}
 
 \section{Impacts on the Standard}
 %%%%%%%%%%%%%%%%%
