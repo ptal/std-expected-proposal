@@ -208,6 +208,7 @@ The main enhancements or differences of the proposed \cpp{expected<T,E>} respect
 %%%%%%%%%%
 
 \subsection{Safe division}
+\label{divide-example}
 %%%%%%%%%%%
 
 This first example shows how to define a safe divide operation checking for divide-by-zero conditions. Using exceptions, we might write something like this:
@@ -246,7 +247,7 @@ int f1(int i, int j, int k)
 becomes using \texttt{expected<int>}:
 
 \begin{lstlisting}
-expected<int> f1(int i, int j, int k)
+expected<int> f1(int i, int j, int k) noexcept
 {
   auto q = safe_divide(j, k)
   if(q.valid()) return i + *q;
@@ -258,7 +259,7 @@ expected<int> f1(int i, int j, int k)
 However \cpp{expected<T>} delivers cleaner code when used in a functional style:
 
 \begin{lstlisting}
-expected<int> f1(int i, int j, int k)
+expected<int> f1(int i, int j, int k) noexcept
 {
   return safe_divide(j, k).next([&](int q){
     return i + q;
@@ -269,7 +270,7 @@ expected<int> f1(int i, int j, int k)
 The \cpp{next} members calls the continuation provided if expected contains a value, otherwise it forwards the error to the callee. Using lambda function might cluttered the code, so here an example using functor:
 
 \begin{lstlisting}
-expected<int> f1(int i, int j, int k)
+expected<int> f1(int i, int j, int k) noexcept
 {
   return safe_divide(j, k)
     .next(bind(plus, i, _1));
@@ -285,7 +286,7 @@ struct NotDivisible: public std::exception
   NotDivisible(int i, int j) : i(i), j(j) {}
 };
 
-expected<int> safe_divide(int i, int j)
+expected<int> safe_divide(int i, int j) noexcept
 {
   if (j == 0) return make_unexpected(DivideByZero()); 
   if (i%j != 0) return make_unexpected(NotDivisible(i,j));
@@ -317,7 +318,7 @@ T divide(T i, T j)
 and then using \cpp{expected<T>}:
 
 \begin{lstlisting}
-expected<int> divide(int i, int j)
+expected<int> divide(int i, int j) noexcept
 {
   auto e = safe_divide(i,j);
   if(has_unexpected<NotDivisible>(e))
@@ -328,7 +329,7 @@ expected<int> divide(int i, int j)
 \end{lstlisting}
 
 \noindent
-Lets continue with the exception-oriented function $i/k + j/k$:
+The \cpp{has_unexpected} function throw the contained exception and thus should not be called multiple times to discriminate over exceptions in an if-else statement if we care about performances. A more efficient way is shown in section \ref{exception-based-expected}. Lets continue with the exception-oriented function $i/k + j/k$:
 
 \begin{lstlisting}
 int f2(int i, int j, int k)
@@ -341,7 +342,7 @@ int f2(int i, int j, int k)
 Now let's write this code using an \cpp{expected<T>} type and an imperative flavour:
 
 \begin{lstlisting}
-expected<int> f2(int i, int j, int k)
+expected<int> f2(int i, int j, int k) noexcept
 {
   auto q1 = safe_divide(i, k);
   if (!q1.valid()) return q1;
@@ -356,7 +357,7 @@ expected<int> f2(int i, int j, int k)
 This is nice in the sense that whenever there is an error we get a specific error result. However the ``clean code'' characteric introduced in section \ref{motiv-scope} is not well-respected as the readability doesn't differ much from the ``C return code''. We can rewrite this using a continuation passing style as follows:
 
 \begin{lstlisting}
-expected<int> f(int i, int j, int k)
+expected<int> f(int i, int j, int k) noexcept
 {
   return safe_divide(i, k).then([=](int q1) {
       return safe_divide(j,k).then([=](int q2) {
@@ -379,97 +380,6 @@ expected<int> f(int i, int j, int k)
 
 The function \cpp{mbind} returns the first erroneous expected argument or, if they all contain a value, the result of the \cpp{plus} operation.
 
-\subsection{Getting an int range}
-
-The next use case shows how expected scales and compose. Given the functions \cpp{getInt} and \cpp{matchesString}, how to define a function that parses an int range ``<int>..<int>'' \cpp{getIntRange}?
-
-Next follows the Standard IO facet style to get an int from a stream (only the iterators are shown):
-
-\begin{lstlisting}
-template <typename InputIterator>
-  InputIterator getInt(InputIterator s, InputIterator end, errc& err, int& t);
-\end{lstlisting}
-
-In addition to manage with the Iterators, the function changes the error and the int value itself. Let start by defining the function as if the functions throw an exception when there is an error and make use of an hypothetic istream_range class that would encapsulate the iterators. 
-
-\begin{lstlisting}
-template <typename InputIterator>
-  int getInt(istream_range& r);
-template <typename InputIterator>
-  void matchesString(string, istream_range& r);
-\end{lstlisting}
-
-The get int range could be defined as
-
-\begin{lstlisting}
-template <class InputIterator>
-  pair<int,int> getIntRange(istream_range& r) {
-    auto f = getInt(r);
-    matchesString("..", r).
-    auto l = getInt(r);       
-    return make_pair(f, l);
-}
-\end{lstlisting}
-
-Clearly this is quite clean. However, when exceptions are not desirable, \cpp{expected<>} comes into play. 
-The signature of \cpp{getInt} ,  \cpp{matchesString} and \cpp{getIntervalInt} using \cpp{expected}, could be 
-
-\begin{lstlisting}
-  expected<pair<int, int>, errc> getInt(istream_range& r);
-  expected<void, errc> matchesString(istream_range& r);
-  expected<pair<int, int>, errc> getIntervalInt(istream_range& r);
-\end{lstlisting}
-
-But, how to define \cpp{getIntervalInt}. Let me start by the basic solution
-
-\begin{lstlisting}
-expected<pair<int, int>, errc> getIntervalInt(istream_range& r) {
-  auto  f = getInt(r);
-  if (! f) return f.get_unexpected();
-
-  auto  m = matchedString("..", r);
-  if (! m) return m.get_unexpected();
-
-  auto  l = getInt(r);
-  if (! l) return l.get_unexpected();
-
-  return std::make_pair(*f, *l);
-}
-\end{lstlisting}
-
-The preceding approach while simple contains additional control flow respect to the exception based solution. An alternative using a continuation passing style follows
-
-\begin{lstlisting}
-expected<pair<int, int>, errc> getIntervalInt(istream_range& r) {
-  return getInt(r)
-   .then( [&r](int f){ return matchedString("..", r).then([f]() { return f; }); }
-  ).then( [&r](int f){ return getInt(r).then([f](int l) { return std::make_pair(f,l); }); }
-  );
-}
-\end{lstlisting}
-
-While the control flow has disappeared, the continuation passing style force to capture a lot of variables. The expression could be simplified if we make use of some functors as identity that returns always its parameter and pair_1st that returns a pair build with the constructor parameter and the continuation parameter.
-
-\begin{lstlisting}
-expected<pair<int, int>, errc> getIntervalInt(istream_range& r) {
-  return getInt(r)
-   .then( [&r](int f){ return matchedString("..", r).then( identity(f)); }
-  ).then( [&r](int f){ return getInt(r).then( pair_1st(f)); }
-  );
-}
-\end{lstlisting}
-
-Having a good functor library could help, but with the not yet proposed expect operator this would be a little bit simpler
-
-\begin{lstlisting}
-expected<pair<int, int>, errc> getIntervalInt(istream_range& r) {
-  auto  f = expect getInt(r);
-            expect matchedString("..", r);
-  auto  l = expect getInt(r);
-  return std::make_pair(f, l);
-}
-\end{lstlisting}
-
 \subsection{Error retrieval and correction}
 %%%%%%%%%%%%%%%%
 
@@ -481,10 +391,85 @@ The major advantage of \cpp{expected<T,E>} over \cpp{optional<T>} is the ability
  \item Trying to resolve the error.
 \end{enumerate}
 
-Because the first behaviour leads to buggy application, we won't consider it in a first time.
+Because the first behaviour might lead to buggy application, we won't consider it in a first time. The handling is dependent of the underlying error type, we consider the \cpp{exception_ptr} and the \cpp{error_condition} types.
 
 \subsubsection{Exception-based expected}
+\label{exception-based-expected}
+
+\cpp{exception_ptr} the default error type of the class \cpp{expected<T>}. The following example (previously introduced in section \ref{divide-example}) shows how to transform an expected interface into the corresponding exception one's. It is useful if we want to switch over different error-handling style.
+
+\begin{lstlisting}
+int f2(int i, int j, int k)
+{
+  // if the underlying expected doesn't contain a value
+  // it throws the contained exception.
+  int q1 = safe_divide(i, k).value();
+  int q2 = safe_divide(j, k).value();
+
+  return q1 + q2;
+}
+\end{lstlisting}
+
+Thus the \cpp{f2} function is no longer annotated with the \cpp{noexcept} specifier. In some cases, even if the underlying error system is exception-based, we don't want to throw it away but to directly recover from the unexpected value. 
+
+\begin{lstlisting}
+int divide_or_0(int i, int j) noexcept
+{
+  auto e = safe_divide(i,j);
+  return *(e.catch_error((const exception_ptr& e){
+    return 0;
+  }));
+}
+\end{lstlisting}
+
+The \cpp{catch_error} function calls the continuation if the expected is erroneous. In some case, we'll be able to recover only from a subset of the possible error. With exception, the most efficient way is to throw the contained exception and catch the ones we're able to recover from.
+
+\begin{lstlisting}
+expected<int> divide_lower_bound(int i, int j) noexcept
+{
+  auto e = safe_divide(i,j);
+  return e.catch_error((const exception_ptr& e){
+    try
+    {
+      rethrow_exception(e);
+    }
+    // If it failed because it wasn't an integer division.
+    catch(const NotDivisible& d)
+    {
+      return d.i/d.j;
+    }
+    catch(...)
+    {
+      return make_unexpected(e);
+    }
+  });
+}
+\end{lstlisting}
+
+Some might argue that this solution is nearly identical to the one with exception-only presented in section \ref{divide-example}. The main advantages are the error treatment isolation (it can be encapsulated in a function) and we keep the basic advantages of expected despite manipulating exception (our function is still \cpp{noexcept}).
+
 \subsubsection{Error-based expected}
+
+The two last examples would work similarly with any other kinds of error. For example here we're using the \cpp{error_condition} type.
+
+\begin{lstlisting}
+expected<int, error_condition> divide_lower_bound(int i, int j) noexcept
+{
+  auto e = safe_divide(i,j);
+  return e.catch_error((const error_condition& e){
+    if(e.value() == divide_err::not_divisible)
+    {
+      return d.i/d.j;
+    }
+    else
+    {
+      return make_unexpected(e);
+    }
+  });
+}
+\end{lstlisting}
+
+The code is similar to the one with exceptions but do not suffer from performance issue since we don't re-throw exceptions.
 
 \section{Impacts on the Standard}
 %%%%%%%%%%%%%%%%%
