@@ -329,7 +329,7 @@ expected<int> divide(int i, int j) noexcept
 \end{lstlisting}
 
 \noindent
-The \cpp{has_unexpected} function throw the contained exception and thus should not be called multiple times to discriminate over exceptions in an if-else statement if we care about performances. A more efficient way is shown in section \ref{exception-based-expected}. Lets continue with the exception-oriented function $i/k + j/k$:
+The \cpp{has_unexpected} function throws the contained exception and thus should not be called multiple times to discriminate over exceptions in an if-else statement if we care about performances. A more efficient way is shown in section \ref{exception-based-expected}. Lets continue with the exception-oriented function $i/k + j/k$:
 
 \begin{lstlisting}
 int f2(int i, int j, int k)
@@ -354,7 +354,7 @@ expected<int> f2(int i, int j, int k) noexcept
 }
 \end{lstlisting}
 
-This is nice in the sense that whenever there is an error we get a specific error result. However the ``clean code'' characteric introduced in section \ref{motiv-scope} is not well-respected as the readability doesn't differ much from the ``C return code''. We can rewrite this using a continuation passing style as follows:
+This is nice in the sense that whenever there is an error we get a specific error result. However the ``clean code'' characteristic introduced in section \ref{motiv-scope} is not well-respected as the readability doesn't differ much from the ``C return code''. We can rewrite this using a continuation passing style as follows:
 
 \begin{lstlisting}
 expected<int> f(int i, int j, int k) noexcept
