@@ -458,7 +458,7 @@ expected<error_condition, int> divide_lower_bound(int i, int j) noexcept
   return e.catch_error(const error_condition& e){
     if(e.value() == divide_err::not_divisible)
     {
-      return d.i/d.j;
+      return e.i/e.j;
     }
     else
     {
@@ -569,10 +569,10 @@ This implies that expected may be viewed precisely as a union of exactly its bou
 \end{itemize}
 
 \begin{itemize}
-\item Should the default constructor of \cpp{std::expected<E,T>} behave like \cpp{boost::variant<T,E>} or as \cpp{boost::variant<E,T>}?
-\item Should the default constructor of \cpp{std::expected<E,T>} behave like \cpp{std::experimental::optional<boost::variant<T,E>>}?
-\item Should the default constructor of \cpp{std::expected<nullopt_t,T>} behave like \cpp{std::experimental::optional<T>}? If yes, how should behave the default constructor of \cpp{std::expected<E,T>}? as if initialized with \cpp{make_unexpected(E())}? This will be equivalent to the initialization of \cpp{boost::variant<E,T>}.
-\item Should \cpp{std::expected<E,T>} provide a default constructor at all? \cite{OptionalRev3} present valid arguments agains this approach, e.g. \cpp{array<optional<T>} would not be possible. 
+\item Should the default constructor of \cpp{std::experimental::expected<E,T>} behave like \cpp{boost::variant<T,E>} or as \cpp{boost::variant<E,T>}?
+\item Should the default constructor of \cpp{std::experimental::expected<E,T>} behave like \cpp{std::experimental::optional<boost::variant<T,E>>}?
+\item Should the default constructor of \cpp{std::experimental::expected<nullopt_t,T>} behave like \cpp{std::experimental::optional<T>}? If yes, how should behave the default constructor of \cpp{std::experimental::expected<E,T>}? as if initialized with \cpp{make_unexpected(E())}? This will be equivalent to the initialization of \cpp{boost::variant<E,T>}.
+\item Should \cpp{std::experimental::expected<E,T>} provide a default constructor at all? \cite{OptionalRev3} present valid arguments agains this approach, e.g. \cpp{array<optional<T>>} would not be possible. 
 \end{itemize}
 
 Requiring \cpp{E} to be default constructible seems less constraining than requiring \cpp{T} to be default constructible. E.g. consider the \cpp{Date} example in \cite{OptionalRev3}. With the same semantics \cpp{expected<E,Date>} would be \cpp{Regular} with a meaningful not-a-date state created by default.
@@ -603,14 +603,6 @@ expected<exception_ptr,int> ei = make_expected(1);
 auto ej = make_expected(1); 
 \end{lstlisting}
 
-\subsubsection{Using \cpp{unexpect} or \cpp{make_unexpected} to convert from \cpp{E}}
-%%%%%%%%%%%%%%%%%%
-
-An object of type \cpp{E} is not convertible to an object of type \cpp{expected<E,T>}:
-
-The proposed interface uses a special tag \cpp{unexpect} to indicate an unexpected value expected state. It is used for construction, assignment and relational operations. This might rise a couple of objections. First, this convenience feature is not strictly necessary because you can achieve the same effect by using the \cpp{unexpect} tagged forwarding constructor:
-
-
 \subsubsection{Using \cpp{make_unexpected} to convert from \cpp{E}}
 %%%%%%%%%%%%%%%%%%
 
@@ -619,11 +611,11 @@ An object of type \cpp{E} is not convertible to an unexpected object of type \cp
 The proposed interface uses a special tag \cpp{unexpect} and a special non-member \cpp{make_unexpected} function to indicate an unexpected state for \cpp{expected<E,T>}. It is used for construction, assignment and relational operations. This might rise a couple of objections. First, this duplication is not strictly necessary because you can achieve the same effect by using the \cpp{unexpect} tagged forwarding constructor:
 
 \begin{lstlisting}
-expected<int, string> opt1 = make_unexpected(1); 
-expected<int, string> opt2 = {unexpect, 1}; 
+expected<int, string> exp1 = make_unexpected(1); 
+expected<int, string> exp2 = {unexpect, 1}; 
 
-opt1 =   make_unexpected(1);
-opt2 =  {unexpect, 1};
+exp1 =   make_unexpected(1);
+exp2 =  {unexpect, 1};
 
 \end{lstlisting}
 
@@ -786,7 +778,7 @@ expected<errc, pair<int, int>> getIntRange(istream_range& r) {
 \subsubsection{Function \cpp{has_exception}}
 %%%%%%%%%%%%%%%%%%%%%%%%
 
-\cite{AlexandrescuExpected} Expected class had a \cpp{has_exception<E>} function that checks if the expected object has a stored exception that derived from E. This function has a sense only when the error parameter is a exception type erasure as \cpp{std::exception_ptr} that contains any exception. This function is useful when the user don't needs to get more information that the type of the stored exception.
+\cite{AlexandrescuExpected} Expected class has a \cpp{has_exception<E>} function that checks if the expected object has a stored exception that derived from E. This function has a sense only when the error parameter is a exception type erasure as \cpp{std::exception_ptr} that contains any exception. This function is useful when the user don't needs to get more information that the type of the stored exception.
 
 \begin{lstlisting}
 expected<exception_ptr,int> getIntOrZero(istream_range& r) {
@@ -1081,34 +1073,7 @@ While it could seem weird to instantiate optional with \cpp{void}, it has more s
 \subsubsection{\cpp{NullableProxy}}
 %%%%%%%%%%%%%%%%%%
 
-As optional objects, the primary purpose of expected object is to check if they contain a value and if so, to provide access to this value. We observe that a similar functionality is offered by raw and smart pointers, except for the "contains" part: pointers do not contain the value they point to. Nonetheless, expected objects, optional objects and pointers have enough things in common that certain class of generic functions can be written that can be used with either. We call the identified concept \cpp{NullableProxy}. Basically, the concept indicates that a type is a 'proxy' for another type. The operations allowed are: checking if there exists an object that our proxy can indirect us to and the indirection operation. The operations can be summarized by the following use-case:
-
-\begin{lstlisting}
-temmplate <class NullableProxy>
-void test(NullableProxy&& np)
-{
-  if (np)              // 'has-object' check
-    auto&& obj = *np;  // object access
-  if (!np) {}          // 'doesn't have object'
-}
-\end{lstlisting}
-
-These requirements are sufficient to specify a couple of generic functions (not proposed), like the one below:
-
-\begin{lstlisting}
-template <typename NullableProxy>
-// enable_if: decltype(*declval<NullableProxy>()) is EqualityComparable
-bool equal_pointees( const NullableProxy& x, const NullableProxy& y )
-{
-  return bool(x) != bool(y) ? false : ( x ? *x == *y : true );
-}
-\end{lstlisting}
-
-This is exactly the logic for the equality comparison of optional values, and could be used as an implementation of \cpp{expecte<T>::operator==}. A similar algorithm for less-than comparison can be specified. The third example is function \cpp{value_or} discussed below. Another example is function \cpp{as_ptr} discussed below, for providing raw pointer access to a possibly-null proxied value.
-
-Requirements \cpp{NullableProxy} overlap with requirements \cpp{NullablePointer}. Their common part could be extracted to separate requirements, say \cpp{Nullable}, but these requirements are too small to be useful alone for anything.
-
-We do not propose to add \cpp{NullableProxy} to Library at this time, as the usage base may be too small for justifying the change. It may prove a useful addition in the future.
+As optional objects, the primary purpose of expected object is to check if they contain a value and if so, to provide access to this value.  \cpp{expected<E,T>} could be seen also as a \cpp{NullableProxy}.  
 
 \subsection{Literals}
 
@@ -1493,8 +1458,8 @@ the authors consider that this is not really needed and that this parameter shou
 The user can use \cpp{value_or_throw()} as
 
 \begin{lstlisting}
-std::expected<std::error_code, int> f();
-std::expected<std::error_code, int> e = f();
+std::experimental::expected<std::error_code, int> f();
+std::experimental::expected<std::error_code, int> e = f();
 auto i = e.value_or_throw<std::system_error>();  
 \end{lstlisting}
 
@@ -1516,7 +1481,7 @@ struct MyExpected {
 and use it as
 
 \begin{lstlisting}
-std::expected<std::error_code, int> f();
+std::experimental::expected<std::error_code, int> f();
 MyExpected<int> e = f();
 auto i = e.value();  // std::system_error throw if not valid
 \end{lstlisting}
@@ -1534,7 +1499,7 @@ template <class Error, class Exception>
 \end{lstlisting}
 
 \begin{lstlisting}
-std::expected<std::error_exception<std::error_code, std::system_error>, T> e = make_unexpected(err);
+std::experimental::expected<std::error_exception<std::error_code, std::system_error>, T> e = make_unexpected(err);
 e.value(); // will thow std::system_error(err);
 \end{lstlisting}
 
