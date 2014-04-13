@@ -119,7 +119,7 @@
 \section{Introduction}
 %%%%%%%%%%%
 
-Class template \cpp{expected<E,T>} proposed here is a type that may contain a value of type \cpp{T} or a value of type \cpp{E} in its storage space. \cpp{T} represents the expected value, \cpp{E} represents the reason explaining why it doesn't contains a value of type \cpp{T}, that is the unexpected value. Its interface allows to query if the underlying value is either the expected value (of type \cpp{T}) or an unexpected value (of type \cpp{E}). The original idea comes from Andrei Alexandrescu C++ and Beyond 2012: Systematic Error Handling in C++ talk \cite{AlexandrescuExpected}. The interface and the rational are based on \cpp{std::optional} N3793 \cite{OptionalRev5} and Haskell monads. We can consider that \cpp{expected<E,T>} is a generalization of optional<T> providing in addition a monad interface and some specific functions associated to the unexpected type \cpp{E}. It requires no changes to core language, and breaks no existing code.
+Class template \cpp{expected<E,T>} proposed here is a type that may contain a value of type \cpp{T} or a value of type \cpp{E} in its storage space. \cpp{T} represents the expected value, \cpp{E} represents the reason explaining why it doesn't contains a value of type \cpp{T}, that is the unexpected value. Its interface allows to query if the underlying value is either the expected value (of type \cpp{T}) or an unexpected value (of type \cpp{E}). The original idea comes from Andrei Alexandrescu C++ and Beyond 2012: Systematic Error Handling in C++ talk \cite{AlexandrescuExpected}. The interface and the rational are based on \cpp{std::optional} N3793 \cite{OptionalRev5} and Haskell monads. We can consider that \cpp{expected<E,T>} is a generalization of \cpp{optional<T>} providing in addition a monad interface and some specific functions associated to the unexpected type \cpp{E}. It requires no changes to core language, and breaks no existing code.
 
 \section{Motivation and Scope}
 \label{motiv-scope}
@@ -198,10 +198,9 @@ However \cpp{Expected<T>} class also has some minor limitations:
 
 The main enhancements or differences of the proposed \cpp{expected<E,T>} respect to \cpp{Expected<T>} are:
 \begin{itemize}
- \item \cpp{expected<E,T>} parameterizes the root cause that prevents its creation, \cpp{expected<E,T>} is either a \cpp{T} or the root cause \cpp{E} that prevents its creation. The default type \cpp{E} would be \cpp{std::exception_ptr} as the exceptions seem to be the most used error-handling system. There is also some supports for the classes in the \cpp{<system_error>} header.
- \item \cpp{expected<E,T>} is default constructible.
+ \item \cpp{expected<E,T>} parameterizes the root cause that prevents its creation, \cpp{expected<E,T>} is either a \cpp{T} or the root cause \cpp{E} that prevents its creation.  \item \cpp{expected<E,T>} is default constructible.
  \item \cpp{expected<E,T>} is implicitly constructible from an \cpp{unexpected_type<E>}.
- \item \cpp{expected<E,T>} is a monad (see \cite{MONAD}).
+ \item \cpp{expected<E,T>} is a monad error (see \cite{MONAD_ERROR}).
 \end{itemize}
 
 \section{Use cases}
@@ -374,7 +373,7 @@ expected<exception_ptr,int> f(int i, int j, int k)
 {
   return mbind(plus,
     safe_divide(i, k), 
-    safe_divide(j,k));
+    safe_divide(j, k));
 }
 \end{lstlisting}
 
@@ -383,7 +382,7 @@ The function \cpp{mbind} returns the first erroneous expected argument or, if th
 \subsection{Error retrieval and correction}
 %%%%%%%%%%%%%%%%
 
-The major advantage of \cpp{expected<E,T>} over \cpp{optional<T>} is the ability to transport error, but we didn't come yet to an example that retrieve the error. First of all, we should wonder what a programmer do when a function call returns an error:
+The major advantage of \cpp{expected<E,T>} over \cpp{optional<T>} is the ability to transport un error, but we didn't come yet to an example that retrieve the error. First of all, we should wonder what a programmer do when a function call returns an error:
 
 \begin{enumerate}
  \item Ignore it.
@@ -416,7 +415,7 @@ Thus the \cpp{f2} function is no longer annotated with the \cpp{noexcept} specif
 int divide_or_0(int i, int j) noexcept
 {
   auto e = safe_divide(i,j);
-  return *(e.catch_error((const exception_ptr& e){
+  return *(e.catch_error(const exception_ptr& e){
     return 0;
   }));
 }
@@ -428,7 +427,7 @@ The \cpp{catch_error} function calls the continuation if the expected is erroneo
 expected<exception_ptr,int> divide_lower_bound(int i, int j) noexcept
 {
   auto e = safe_divide(i,j);
-  return e.catch_error((const exception_ptr& e){
+  return e.catch_error(const exception_ptr& e){
     try
     {
       rethrow_exception(e);
@@ -456,7 +455,7 @@ The two last examples would work similarly with any other kinds of error. For ex
 expected<error_condition, int> divide_lower_bound(int i, int j) noexcept
 {
   auto e = safe_divide(i,j);
-  return e.catch_error((const error_condition& e){
+  return e.catch_error(const error_condition& e){
     if(e.value() == divide_err::not_divisible)
     {
       return d.i/d.j;
@@ -1736,11 +1735,17 @@ This subclause describes class template expected that represents expected object
 namespace std {
 namespace experimental {
 inline namespace fundamentals_v2 {
+  // \ref{expected.holder}, holder class used as default.  
+  class holder;
   // \ref{expected.object}, expected for object types  
-  template <class T, class E = exception_ptr>
+  template <class E= exception_ptr, class T=holder>
   class expected;
+  // \ref{expected.object.void}, Specialization for void.  
   template <class E>
   class expected<E, void>;
+  // \ref{expected.object.meta}, Specialization of expected as a meta-function : T-> expected<E,T>.  
+  template <class E>
+  class expected<E, holder>;
    
   // \ref{expected.unexpect}, unexpect tag
   struct unexpect_t{};
@@ -1845,7 +1850,7 @@ An instance of \cpp{expected<E,T>} is said to be unexpected if it contains an ob
     typedef E error_type;
     
     template <class U>
-    struct bind {
+    struct rebind {
       typedef expected<error_type, U> type;
     };
     
@@ -2688,6 +2693,17 @@ otherwise, returns \cpp{*this}.
 \end{wordingTextItem}
 \end{wordingPara}
 
+\wordingSubSec{\cpp{expected} as a meta-fuction}{expected.object.meta}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{lstlisting}
+  template <class E>
+  class expected<E, holder>
+  public:
+    template <class T>
+    using type = expected<E,T>
+  };
+\end{lstlisting}
 
 \wordingSubSec{expected for void}{expected.object.void}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -2701,7 +2717,7 @@ otherwise, returns \cpp{*this}.
     typedef E error_type;
     
     template <class U>
-    struct bind {
+    struct rebind {
       typedef expected<error_type, U> type;
     };
     
