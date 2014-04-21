@@ -226,7 +226,7 @@ int safe_divide(int i, int j)
 Which, using \cpp{expected<exception_ptr,int>}, turns to:
 
 \begin{lstlisting}
-expected<exception_ptr,int> safe_divide(int i, int j) noexcept
+expected<exception_ptr,int> safe_divide(int i, int j)
 {
   if (j==0) return make_unexpected(DivideByZero()); // (1)
   else return i / j; // (2)
@@ -246,7 +246,7 @@ int f1(int i, int j, int k)
 becomes using \texttt{expected<exception_ptr,int>}:
 
 \begin{lstlisting}
-expected<exception_ptr,int> f1(int i, int j, int k) noexcept
+expected<exception_ptr,int> f1(int i, int j, int k)
 {
   auto q = safe_divide(j, k)
   if(q.valid()) return i + *q;
@@ -258,21 +258,20 @@ expected<exception_ptr,int> f1(int i, int j, int k) noexcept
 However \cpp{expected<E,T>} delivers cleaner code when used in a functional style:
 
 \begin{lstlisting}
-expected<exception_ptr,int> f1(int i, int j, int k) noexcept
+expected<exception_ptr,int> f1(int i, int j, int k)
 {
-  return safe_divide(j, k).next([&](int q){
+  return safe_divide(j, k).mbind([&](int q){
     return i + q;
   });
 }
 \end{lstlisting}
 
-The \cpp{next} members calls the continuation provided if expected contains a value, otherwise it forwards the error to the callee. Using lambda function might cluttered the code, so here an example using functor:
+The \cpp{mbind} members calls the continuation provided if expected contains a value, otherwise it forwards the error to the callee. Using lambda function might clutter the code, so here an example using functor:
 
 \begin{lstlisting}
-expected<exception_ptr,int> f1(int i, int j, int k) noexcept
+expected<exception_ptr,int> f1(int i, int j, int k)
 {
-  return safe_divide(j, k)
-    .next(bind(plus, i, _1));
+  return safe_divide(j, k).mbind(bind(plus, i, _1));
 }
 \end{lstlisting}
 
@@ -285,7 +284,7 @@ struct NotDivisible: public std::exception
   NotDivisible(int i, int j) : i(i), j(j) {}
 };
 
-expected<exception_ptr,int> safe_divide(int i, int j) noexcept
+expected<exception_ptr,int> safe_divide(int i, int j)
 {
   if (j == 0) return make_unexpected(DivideByZero()); 
   if (i%j != 0) return make_unexpected(NotDivisible(i,j));
@@ -317,10 +316,10 @@ T divide(T i, T j)
 and then using \cpp{expected<E,T>}:
 
 \begin{lstlisting}
-expected<exception_ptr,int> divide(int i, int j) noexcept
+expected<exception_ptr,int> divide(int i, int j)
 {
   auto e = safe_divide(i,j);
-  if(has_unexpected<NotDivisible>(e))
+  if(e.has_exception<NotDivisible>())
     return i/j;
   else 
     return e;
@@ -328,7 +327,18 @@ expected<exception_ptr,int> divide(int i, int j) noexcept
 \end{lstlisting}
 
 \noindent
-The \cpp{has_unexpected} function throws the contained exception and thus should not be called multiple times to discriminate over exceptions in an if-else statement if we care about performances. A more efficient way is shown in section \ref{exception-based-expected}. Lets continue with the exception-oriented function $i/k + j/k$:
+The \cpp{has_exception} function throws the contained exception and thus should not be called multiple times to discriminate over exceptions in an if-else statement if we care about performances. A more efficient way is shown in section \ref{exception-based-expected}. 
+
+\begin{lstlisting}
+expected<exception_ptr,int> divide(int i, int j)
+{
+  return safe_divide(i,j).catch_excception<NotDivisible>([](auto &ex)
+    return ex.i/ex.j;
+  });
+}
+\end{lstlisting}
+
+Lets continue with the exception-oriented function $i/k + j/k$:
 
 \begin{lstlisting}
 int f2(int i, int j, int k)
@@ -341,7 +351,7 @@ int f2(int i, int j, int k)
 Now let's write this code using an \cpp{expected<E,T>} type and an imperative flavour:
 
 \begin{lstlisting}
-expected<exception_ptr,int> f2(int i, int j, int k) noexcept
+expected<exception_ptr,int> f2(int i, int j, int k)
 {
   auto q1 = safe_divide(i, k);
   if (!q1.valid()) return q1;
@@ -353,31 +363,117 @@ expected<exception_ptr,int> f2(int i, int j, int k) noexcept
 }
 \end{lstlisting}
 
-This is nice in the sense that whenever there is an error we get a specific error result. However the ``clean code'' characteristic introduced in section \ref{motiv-scope} is not well-respected as the readability doesn't differ much from the ``C return code''. We can rewrite this using a continuation passing style as follows:
+This is nice in the sense that whenever there is an error we get a specific error result. However the ``clean code'' characteristic introduced in section \ref{motiv-scope} is not well-respected as the readability doesn't differ much from the ``C return code''. We can rewrite this using a functional style using the member function \cpp{fbind}\footnote{\cpp{fbind} stands for ``monadic bind''.}:as follows:
 
 \begin{lstlisting}
-expected<exception_ptr,int> f(int i, int j, int k) noexcept
+expected<exception_ptr,int> f(int i, int j, int k)
 {
-  return safe_divide(i, k).then([=](int q1) {
-      return safe_divide(j,k).then([=](int q2) {
+  return safe_divide(i, k).mbind([=](int q1) {
+      return safe_divide(j,k).mbind([=](int q2) {
         return q1+q2;
       });
     });
 }
 \end{lstlisting}
 
-The error-handling code has completely disappeared but the continuations are a new source of noise, and this is even more important with $n$ expected variables. A cleaner solution uses the variadic free function \cpp{mbind}\footnote{\cpp{mbind} stands for ``monadic bind''.}:
+The error-handling code has completely disappeared but the lambda functions are a new source of noise, and this is even more important with $n$ expected variables. A cleaner solution uses the variadic free function \cpp{fmap}\footnote{\cpp{fmap} stands for ``functor map''.}:
 
 \begin{lstlisting}
 expected<exception_ptr,int> f(int i, int j, int k)
 {
-  return mbind(plus,
+  return fmap(plus,
     safe_divide(i, k), 
     safe_divide(j, k));
 }
 \end{lstlisting}
 
-The function \cpp{mbind} returns the first erroneous expected argument or, if they all contain a value, the result of the \cpp{plus} operation.
+The function \cpp{fmap} returns the first erroneous expected argument or, if they all contain a value, the result of the \cpp{plus} operation.
+
+
+Now let's rewrite this using a possible C++ language extension: adding a DO expression like the Haskel do expression. It is something similar  to the \cpp{await} extension for futures by it is not limited to futures. It works for any monad.   
+
+The grammar could be
+
+\begin{lstlisting}
+do-expression ::= do-initialization ':' do-expression-or-expression
+
+do-expression-or-expression ::= do-expression |�expression
+
+do-initialization ::= type var '<-' expression
+\end{lstlisting}
+
+The meaning of \cpp{do-expression}  is given by a transformation \cpp{[[ ]]}
+
+\begin{lstlisting}
+[[do-expression]] =
+  mbind(expression,[&](type var) {
+    return [[do-expression-or-expression]]
+  });
+\end{lstlisting}
+
+The previous function could be written as
+
+\begin{lstlisting}
+expected<exception_ptr,int> f2(int i, int j, int k)
+{
+  return (
+  	auto s1 <- safe_divide(i, k) :
+  	auto s2 <- safe_divide(j, k) :
+   	s1 + s2
+  );
+}
+\end{lstlisting}
+
+resulting in the transformed C++ code
+
+\begin{lstlisting}
+expected<exception_ptr,int> f2(int i, int j, int k)
+{
+  return mbind(safe_divide(i, k) ,[&r](auto s1) {
+    return mbind(safe_divide(j, k),[&r](auto s2) {
+      return s1 + s2;
+    });
+  }); 
+}
+\end{lstlisting}
+
+This would give the exact same results as the previous version. However, the function \cpp{f2} is much simpler and clearer than \cpp{f} because it doesn't have to explicitly handle any of the error cases. When an error case occurs, it is returned as the result of the function, but if not, the correct result of a subexpression is bound to a name (\cpp{s1} or \cpp{s2}), and that result can be used in later parts of the computation. The code is a lot simpler to write. The more complicated the error-handling function, the more important this will be.
+
+But, the standard doesn't have this DO expression yet.
+Waiting for a do-statement the user could define some macros (see \cite{monad_do_poc} and define \cpp{f2} as
+
+\begin{lstlisting}
+expected<exception_ptr,int> f2(int i, int j, int k)
+{
+    return DO (
+         ( s1, safe_divide(i, k) )
+         ( s2, safe_divide(j, k) )
+         s1 + s2 
+    );
+}
+\end{lstlisting}
+
+In the case of expected and optional, that is, monads that are synchronous and have only one value stored, the following macro 
+
+\begin{lstlisting}
+#define EXPECT(V, EXPR) \
+auto BOOST_JOIN(expected,V) = EXPR; \
+if (! BOOST_JOIN(expected,V).valid()) return BOOST_JOIN(expected,V).get_unexpected(); \
+auto V =*BOOST_JOIN(expected,V)
+\end{lstlisting}
+
+can be used to obtain the same result.
+
+\begin{lstlisting}
+expected<exception_ptr,int> f2(int i, int j, int k)
+{
+  EXPECT(s1, safe_divide(i, k) );
+  EXPECT(s2, safe_divide(j, k));
+  return s1 + s2;
+}
+\end{lstlisting}
+
+Note that this meaning of EXPECT is not valid for the list monad. 
 
 \subsection{Error retrieval and correction}
 %%%%%%%%%%%%%%%%
@@ -409,13 +505,13 @@ int f2(int i, int j, int k)
 }
 \end{lstlisting}
 
-Thus the \cpp{f2} function is no longer annotated with the \cpp{noexcept} specifier. In some cases, even if the underlying error system is exception-based, we don't want to throw it away but to directly recover from the unexpected value. 
+In some cases, even if the underlying error system is exception-based, we don't want to throw it away but to directly recover from the unexpected value. 
 
 \begin{lstlisting}
 int divide_or_0(int i, int j) noexcept
 {
   auto e = safe_divide(i,j);
-  return *(e.catch_error(const exception_ptr& e){
+  return *(e.catch_error(const exception_ptr& e) {
     return 0;
   }));
 }
@@ -424,10 +520,10 @@ int divide_or_0(int i, int j) noexcept
 The \cpp{catch_error} function calls the continuation if the expected is erroneous. In some case, we'll be able to recover only from a subset of the possible error. With exception, the most efficient way is to throw the contained exception and catch the ones we're able to recover from.
 
 \begin{lstlisting}
-expected<exception_ptr,int> divide_lower_bound(int i, int j) noexcept
+expected<exception_ptr,int> divide_lower_bound(int i, int j)
 {
   auto e = safe_divide(i,j);
-  return e.catch_error(const exception_ptr& e){
+  return e.catch_error(const exception_ptr& e) {
     try
     {
       rethrow_exception(e);
@@ -445,20 +541,49 @@ expected<exception_ptr,int> divide_lower_bound(int i, int j) noexcept
 }
 \end{lstlisting}
 
-Some might argue that this solution is nearly identical to the one with exception-only presented in section \ref{divide-example}. The main advantages are the error treatment isolation (it can be encapsulated in a function) and we keep the basic advantages of expected despite manipulating exception (our function is still \cpp{noexcept}).
+Some might argue that this solution is nearly identical to the one with exception-only presented in section \ref{divide-example}. The main advantages are the error treatment isolation (it can be encapsulated in a function) and we keep the basic advantages of expected despite manipulating exception.
+
+A better alternative in this case is to use the catch_exception member function
+
+\begin{lstlisting}
+expected<exception_ptr,int> divide_lower_bound(int i, int j)
+{
+  return safe_divide(i,j)
+  .catch_exception<NotDivisible>(auto& d) // If it failed because it wasn't divisible.
+    {
+      return d.i/d.j;
+    }
+  );
+}
+\end{lstlisting}
 
 \subsubsection{Error-based expected}
 
 The two last examples would work similarly with any other kinds of error. For example here we're using the \cpp{error_condition} type.
 
+When the \cpp{Error} template parameter is not \cpp{std::exception_ptr}, the functions \cpp{has_exception()} and \cpp{catch_exception()} have no sense. In this case the user could use the member function \cpp{error())}.
+  
 \begin{lstlisting}
-expected<error_condition, int> divide_lower_bound(int i, int j) noexcept
+expected<error_condition, int> divide_lower_bound(int i, int j)
 {
   auto e = safe_divide(i,j);
-  return e.catch_error(const error_condition& e){
+  if ( !e && e.error() == divide_err::not_divisible ) {
+    return i/j;
+  }
+  return e;
+}
+\end{lstlisting}
+
+The member function \cpp{catch_error} could be used with a continuations passing style to try to recover from an error.
+
+\begin{lstlisting}
+expected<error_condition, int> divide_lower_bound(int i, int j)
+{
+  auto e = safe_divide(i,j);
+  return e.catch_error([i,j](const error_condition& e){
     if(e.value() == divide_err::not_divisible)
     {
-      return e.i/e.j;
+      return i/j;
     }
     else
     {
@@ -469,6 +594,8 @@ expected<error_condition, int> divide_lower_bound(int i, int j) noexcept
 \end{lstlisting}
 
 The code is similar to the one with exceptions but do not suffer from performance issue since we don't re-throw exceptions.
+
+As \cpp{expected<error_condition, int>} doesn't store a exception, when it doesn't contains a value the member function \cpp{value} throws a \cpp{bad_expected_access} exception wrapping the stored error. 
 
 \section{Impacts on the Standard}
 %%%%%%%%%%%%%%%%%
@@ -546,7 +673,7 @@ expected<string,int> ei{unexpect};               // unexpected value, calls stri
 expected<string,int> ej{unexpect, "arg"};        // unexpected value, calls string{"arg"} in place
 \end{lstlisting}
 
-An alternative name for \cpp{in_place} that is coherent with the \cpp{unexpect} could be \cpp{expect}. Been compatible with \cpp{optional<T>} seems more important and in addition, a complementary proposal introduce the \cpp{expect} keyword. So this proposal doesn't propose such a \cpp{expect} tag.
+An alternative name for \cpp{in_place} that is coherent with the \cpp{unexpect} could be \cpp{expect}. Been compatible with \cpp{optional<T>} seems more important. So this proposal doesn't propose such a \cpp{expect} tag.
 
 The alternative and also comprehensive initialization approach, which is not compatible with the choice to default construct \cpp{expected<E,T>} to \cpp{E()}, could be to have a variadic perfect forwarding constructor that just forwards any set of arguments to the constructor of the contained object of type \cpp{T}. 
  
@@ -572,7 +699,7 @@ This implies that expected may be viewed precisely as a union of exactly its bou
 \item Should the default constructor of \cpp{std::experimental::expected<E,T>} behave like \cpp{boost::variant<T,E>} or as \cpp{boost::variant<E,T>}?
 \item Should the default constructor of \cpp{std::experimental::expected<E,T>} behave like \cpp{std::experimental::optional<boost::variant<T,E>>}?
 \item Should the default constructor of \cpp{std::experimental::expected<nullopt_t,T>} behave like \cpp{std::experimental::optional<T>}? If yes, how should behave the default constructor of \cpp{std::experimental::expected<E,T>}? as if initialized with \cpp{make_unexpected(E())}? This will be equivalent to the initialization of \cpp{boost::variant<E,T>}.
-\item Should \cpp{std::experimental::expected<E,T>} provide a default constructor at all? \cite{OptionalRev3} present valid arguments agains this approach, e.g. \cpp{array<optional<T>>} would not be possible. 
+\item Should \cpp{std::experimental::expected<E,T>} provide a default constructor at all? \cite{OptionalRev3} present valid arguments against this approach, e.g. \cpp{array<optional<T>>} would not be possible. 
 \end{itemize}
 
 Requiring \cpp{E} to be default constructible seems less constraining than requiring \cpp{T} to be default constructible. E.g. consider the \cpp{Date} example in \cite{OptionalRev3}. With the same semantics \cpp{expected<E,Date>} would be \cpp{Regular} with a meaningful not-a-date state created by default.
@@ -608,7 +735,7 @@ auto ej = make_expected(1);
 
 An object of type \cpp{E} is not convertible to an unexpected object of type \cpp{expected<E,T>}:
 
-The proposed interface uses a special tag \cpp{unexpect} and a special non-member \cpp{make_unexpected} function to indicate an unexpected state for \cpp{expected<E,T>}. It is used for construction, assignment and relational operations. This might rise a couple of objections. First, this duplication is not strictly necessary because you can achieve the same effect by using the \cpp{unexpect} tagged forwarding constructor:
+The proposed interface uses a special tag \cpp{unexpect} and a special non-member \cpp{make_unexpected} function to indicate an unexpected state for \cpp{expected<E,T>}. It is used for construction and assignment. This might rise a couple of objections. First, this duplication is not strictly necessary because you can achieve the same effect by using the \cpp{unexpect} tagged forwarding constructor:
 
 \begin{lstlisting}
 expected<int, string> exp1 = make_unexpected(1); 
@@ -635,10 +762,16 @@ expected<int, vector<int>> get3() {
 }
 \end{lstlisting}
 
-The usage of \cpp{make_unexpected} is also a consequence of the adapted model for expect: a discriminated union of \cpp{T} and \cpp{unexpected_type<E>}. 
+The usage of \cpp{make_unexpected} is also a consequence of the adapted model for expected: a discriminated union of \cpp{T} and \cpp{unexpected_type<E>}. 
 While \cpp{make_unexpected(E)} has been chosen because it clearly indicates that we are interested in creating an unexpected \cpp{expected<E,T>} (of unspecified type \cpp{T}), it could be used also to make a ready future with a specific exception, but this is outside the scope of this proposal.
 
-Note also that the definition of the result type of \cpp{make_unexpected} has explicitly deleted default constructor. This is in order to enable the reset idiom (\cpp{exp2 = {};}), which would otherwise not work because of ambiguity when deducing the right-hand side argument.
+Note also that the definition of the result type of \cpp{make_unexpected} has explicitly deleted default constructor. This is in order to enable the reset idiom 
+
+\begin{lstlisting}
+exp2 = {};
+\end{lstlisting}
+
+which would otherwise not work because of ambiguity when deducing the right-hand side argument.
 
 \subsubsection{Why not a \cpp{make_unexpected} nested function on \cpp{expected<E,T>}?}
 %%%%%%%%%%%%%%%%%%
@@ -714,12 +847,27 @@ if (expected<exception_ptr, char> ch = readNextChar()) {
 
 Even if \cpp{expected<E,T>} has not been used in practice for a while as Boost.Optional, we consider that following the same interface that \cpp{std::experimental::optional<T>} makes the C++ standard library more homogeneous. 
 
-The same rational described in \cite{OptionalRev4} for \cpp{optional<T>} applies to \cpp{expected<E,T>} and so, 
+The same rational described in \cite{OptionalRev4} for \cpp{optional<T>} applies to \cpp{expected<E,T>}. 
+
+\subsubsection{Dereference operator}
+%%%%%%%%%%%%%%%%%%
+
+It was chosen to use indirection operator because, along with explicit conversion to \cpp{bool}, it is a very common pattern for accessing a value that might not be there:
+
+\begin{lstlisting}
+if (p) use(*p);
+\end{lstlisting}
+
+This pattern is used for all sort of pointers (smart or dumb), \cpp{optional} and it clearly indicates the fact that the value may be missing and that we return a reference rather than a value. The indirection operator has risen some objections because it may incorrectly imply that \cpp{expected} and \cpp{optional} are a (possibly smart) pointer, and thus provides shallow copy and comparison semantics. All library components so far use indirection operator to return an object that is not part of the pointer's/iterator's value. In contrast, \cpp{expected} as \cpp{optional} indirects to the part of its own state. We do not consider it a problem in the design; it is more like an unprecedented usage of indirection operator. We believe that the cost of potential confusion is overweighed by the benefit of an easy to grasp and intuitive interface for accessing the contained value.
+
+We do not think that providing an implicit conversion to \cpp{T} would be a good choice. First, it would require different way of checking for the empty state; and second, such implicit conversion is not perfect and still requires other means of accessing the contained value if we want to call a member function on it.
+
+Using the indirection operator for a object that doesn't contains a value is an undefined behavior. This behavior offers maximum runtime performance.
 
 \subsubsection{Function value}
 %%%%%%%%%%%%%%%%%%
 
-Using the indirection operator for a unexpected object is an undefined behavior. This behavior offers maximum runtime performance. In addition to indirection operator, we provide member function value as in \cite{OptionalRev4} that returns a reference to the contained value if one exists or throws an exception \cpp{bad_expected_access<E>} (derived from \cpp{logic_error}) otherwise:
+In addition to the indirection operator, we propose the member function value as in \cite{OptionalRev4} that returns a reference to the contained value if one exists or throws an exception otherwise:
 
 \begin{lstlisting}
 void interact() {
@@ -737,12 +885,49 @@ void interact() {
 }
 \end{lstlisting}
 
+The exception thrown depend on the expected error type. By default it throws \cpp{bad_expected_access<E>} (derived from \cpp{logic_error}) which will contain the stored error. In the case \cpp{expected<exception_ptr>}, it thows the exception stored on the \cpp{exception_ptr}.
+
+This function can be implemented easily using the bool conversion and the dereference operator as a non member function
+
+\begin{lstlisting}
+  template <class E, class T>
+  contexpr T const& value(expected<E,T> const& e)
+  {
+    if(e) return *e;
+    else throw bad_expected_access(e.error());
+  }
+  template <class E, class T>
+  contexpr T & value(expected<E,T> const& e)
+  {
+    if(e) return *e;
+    else throw bad_expected_access(e.error());
+  }
+  template <class T>
+  contexpr T const& value(expected<exception_ptr,T> const& e)
+  {
+    if(e) return *e;
+    else rethrow_exception(e.error());
+  }
+  template <class T>
+  contexpr T & value(expected<exception_ptr,T> const& e)
+  {
+    if(e) return *e;
+    else rethrow_exception(e.error());
+  }
+\end{lstlisting}
+
+The advantage is the user could overload the function for other errors, as \cpp{any}, \cpp{variant<E1, ...., En>}. The liability is that free functions introduce a new name on the std namespace. Adding it to a specific namespace could solve this issue, but finding a good name is no so simple.
+
 \cpp{bad_expected_access<E>} and \cpp{bad_optional_access} could inherit both from a \cpp{bad_access} exception derived from \cpp{logic_error}, but this is not proposed.
+
+
+\subsubsection{Getting the contained value on the context of a continuation}
+%%%%%%%%%%%%%%%%%%%%%%%
 
 \subsubsection{Accessing the contained error}
 %%%%%%%%%%%%%%%%%%%%%%%
 
-Usually the access to the contained error is done once we know that the expected object has no value. This is why the \cpp{error()} function has a narrow contract, it works only if (! *this).
+Usually the access to the contained error is done once we know that the expected object has no value. This is why the \cpp{error()} function has a narrow contract, it works only if (\cpp{! *this}).
 
 \begin{lstlisting}
   expected<errc,int> getIntOrZero(istream_range& r);
@@ -754,8 +939,7 @@ Usually the access to the contained error is done once we know that the expected
   }
 \end{lstlisting}
 
-
-\subsubsection{Accessing the unexpected value}
+\subsubsection{Conversion to the unexpected value}
 %%%%%%%%%%%%%%%%%%
 
 As the \cpp{error()} function the \cpp{get_unexpected()} works only if the expected object has no value. It is used to propagate errors.
@@ -775,10 +959,30 @@ expected<errc, pair<int, int>> getIntRange(istream_range& r) {
 }
 \end{lstlisting}
 
+It is not really necessary as the line 
+
+\begin{lstlisting}
+  return f.get_unexpected();
+\end{lstlisting}
+
+can be replaced by
+
+\begin{lstlisting}
+  return make_unexpected(f.error());
+\end{lstlisting}
+
+or even
+
+\begin{lstlisting}
+  return expected<errc, pair<int, int>>{unexpect, f.error()};
+\end{lstlisting}
+
+However, the function is provided for symmetry purpose. Implicit conversion from \cpp{unexpected<E>} to \cpp{expected<E,T>} and explicit conversion from  \cpp{expected<E,T>} to  \cpp{unexpected<E>}. 
+
 \subsubsection{Function \cpp{has_exception}}
 %%%%%%%%%%%%%%%%%%%%%%%%
 
-\cite{AlexandrescuExpected} Expected class has a \cpp{has_exception<E>} function that checks if the expected object has a stored exception that derived from E. This function has a sense only when the error parameter is a exception type erasure as \cpp{std::exception_ptr} that contains any exception. This function is useful when the user don't needs to get more information that the type of the stored exception.
+\cite{AlexandrescuExpected} Expected class has a \cpp{hasException<E>} function that checks if the expected object has a stored exception that derived from E. This function has a sense only when the error parameter is a exception type erased as \cpp{std::exception_ptr} that contains any exception. This function is useful when the user don't needs to get more information that the type of the stored exception.
 
 \begin{lstlisting}
 expected<exception_ptr,int> getIntOrZero(istream_range& r) {
@@ -794,19 +998,20 @@ expected<exception_ptr,int> getIntOrZero(istream_range& r) {
 \subsubsection{Function \cpp{catch_exception}}
 %%%%%%%%%%%%%%%%%%
 
-When the user wants to retrieve the whole information on the stored exception the function \cpp{catch_exception}  can be used.
+When the user wants to retrieve the whole information on the stored exception the function \cpp{catch_exception}  can be used instead.
 
 \begin{lstlisting}
   expected<exception_ptr,int> getIntOrZero(istream_range& r) 
   {
     return getInt().
     catch_exception<NotANumber>([](auto& ex) // (1)
-    {  // has complete access to the stored 
+    {  // has complete access to the stored exception
   
     });   // try to recover
   }
 \end{lstlisting}
 
+\cpp{catch_exception<E>} call to the function parameter if the expected instance has no value and the stored exception match the type.
 
 \subsubsection{Function \cpp{value_or}}
 %%%%%%%%%%%%%%%%%%
@@ -1052,7 +1257,7 @@ In order to make the tag uniform an additional 'expect' constructor could be pro
 
 \subsubsection{Requirements}
 
-The \cpp{expected<std::exception_ptr,T>} specialization introduces some operations as \cpp{has_unexpected} and \cpp{catch_unexcpected}. Should we name the classes differently? For example, \cpp{exception_or<T>} and \cpp{error_or<E,T>}.
+The \cpp{expected<std::exception_ptr,T>} specialization introduces some operations as \cpp{has_exception} and \cpp{catch_exception}. Should we name the classes differently? For example, \cpp{exception_or<T>} and \cpp{error_or<E,T>}.
 
 \subsubsection{Requirements on \cpp{T}�and \cpp{E}}
 %%%%%%%%%%%%%%%%%%
@@ -1141,7 +1346,7 @@ The proposed interface for expected values does not contain IO operations: \cpp{
 \subsubsection{When valued/unexpected}
 %%%%%%%%%%
 
-In addition the \cpp{.then()} function that accepts a continuation having the expected object as parameter, the proposal includes two separated functions, one \cpp{.next()} that applies when the expected object is valued and accepts a continuation having the underlying \cpp{value_type} as parameter. The other \cpp{.recover()} applies when the expected object is not valid and is used to try to recover from the error.  
+In addition the \cpp{.then()} function that accepts a continuation having the expected object as parameter, the proposal includes two separated functions, one \cpp{.mbind()} that applies when the expected object is valued and accepts a continuation having the underlying \cpp{value_type} as parameter. The other \cpp{.catch_error()} applies when the expected object is not valid and is used to try to recover from the error.  
 
 \subsubsection{Continuation adaptors}
 %%%%%%%%%%
@@ -1181,10 +1386,10 @@ use( ei.value_or_call(&painfully_compute_default) );
 use( ei.value_or_call([&]{return painfully_compute_default();} );
 \end{lstlisting}
 
-This is quite close to the context of use of  \cpp{recover}, but the function called has no parameter. As there is an alternative using generic lambdas this proposal doesn't propose neither this function.
+This is quite close to the context of use of  \cpp{catch_error}, but the function called has no parameter. As there is an alternative using generic lambdas this proposal doesn't propose neither this function.
 
 \begin{lstlisting}
-ei.restore([](auto){ return painfully_compute_default();}).next(use);       
+ei.catch_error([](auto){ return painfully_compute_default();}).mbind(use);       
 \end{lstlisting}
 
 \subsubsection{When all ready}
@@ -1195,12 +1400,12 @@ ei.restore([](auto){ return painfully_compute_default();}).next(use);
 \subsubsection{When all valued}
 %%%%%%%%%%
 
-However, there is yet a need to apply a function when all the expected are valued. The free function \cpp{next()} takes a variadic continuation and a variadic number of expected parameters. The type and number of the parameters must be compatible with the continuation arguments.
+However, there is yet a need to apply a function when all the expected are valued. The free functions \cpp{mbind()} and \cpp{fmap()} take a variadic continuation and a variadic number of expected parameters. The type and number of the parameters must be compatible with the continuation arguments.
 
 \begin{lstlisting}
  expected<exception_ptr,int> sumFirstAndSecond5(istream_range& r)
 {
-  return next(add, getInt(r), getInt(r));
+  return fmap(plus, getInt(r), getInt(r));
 }
 \end{lstlisting}
 
@@ -1240,9 +1445,7 @@ expected<E,T> unwrap<expected<E,T>> e) {
 }
 \end{lstlisting}
 
-We could add such a function to the standard, either as a free function or as a member function. The authors propose to add it as a free function.
-
-Note that in this proposal the single function that could nest expected is \cpp{make_expected}. The factory functions \cpp{then},\cpp{next} and\cpp{restore} unwrap automatically. Maybe  \cpp{make_expected} should unwrap automatically also.
+We could add such a function to the standard, either as a free function or as a member function. The authors propose to add it as a member function to be inline with \cite{ImprovementsAsync}.
 
 \section{Related types}
 %%%%%%%%%%%
@@ -1278,7 +1481,7 @@ The table \ref{comp-variant} presents a brief comparison between \cpp{boost::var
 \hline
 \textbf{observers} & boost::get<T> and boost::get<E> & pointer-like / value / error / value_or / value_or_throw \\
 \hline
-\textbf{continuations} & apply_visitor & then/next/recover  \\
+\textbf{continuations} & apply_visitor & then/mbind/catch_error  \\
 \hline
 \end{tabular}
 \egroup
@@ -1362,7 +1565,7 @@ We can combine them as follows
 \begin{lstlisting}
 fut.then([](future<int> f) { 
   return make_ready_future(
-    make_expected(f).next([](i){ ... }).recover(...));
+    make_expected(f).mbind([](i){ ... }).catch_error(...));
   });
 \end{lstlisting}
 
@@ -1374,7 +1577,7 @@ As for the \cpp{future<T>} proposal, \cpp{expected<E,T>} provides also a way to 
 \cpp{future<T>} provides a \cpp{then()} function that accepts a continuation having the \cpp{future<T>} as parameter. The synchronous nature of expected makes it easier to use two functions, one to manage with the case expected has a value and one to try to recover otherwise. This is more in line with the monad interface, as any function having a \cpp{T} as parameter can be used as parameter of the apply function, no need to have a \cpp{expected<E,T>}. This make it easier to reuse functions. 
 
 \begin{itemize}
- \item \cpp{expected<E,T>::next()}/\cpp{expected<E,T>::recover()} are the counterpart of \cpp{future<T>.then()}
+ \item \cpp{expected<E,T>::mbind()}/\cpp{expected<E,T>::catch_error()} are the counterpart of \cpp{future<T>.then()}
  \item \cpp{expected<E,T>::unwrap()} is the counterpart of \cpp{future<T>.unwrap()}
  \item \cpp{expected<E,T>::valid()} is the counterpart of \cpp{future<T>.has_value()}
 \end{itemize}
@@ -1414,11 +1617,11 @@ The table \ref{comp-monads} presents a brief comparison between \cpp{optional<T>
 \hline
 \textbf{observers} & pointer-like / value / value_or & pointer-like / value / error / value_or / value_or_throw & get / (get_exception_ptr, see \cite{MoreAsync}) \\
 \hline
-\textbf{continuations} & no & then/next/recover  & then / (next/recover see \cite{MoreAsync}) \\
+\textbf{continuations} & no & then/mbind/catch_error  & then / (next/catch_error see \cite{MoreAsync}) \\
 \hline
 \textbf{grouping} & n/a & n/a & when_all / when_any \\
 \hline
-\textbf{apply} & no & next & no \\
+\textbf{apply} & no & mbind & no \\
 \hline
 \end{tabular}
 \egroup
@@ -1527,7 +1730,7 @@ The proposed changes are expressed as edits to N3908, the Working Draft - C++ Ex
 
 Insert a new section. 
 
-\wordingSec{Unexpected objects}{expected}
+\wordingSec{Unexpected objects}{unexpected}
 %%%%%%%%%%%%%%%%%%%%%
 
 \wordingSubSec{In general}{unexpected.general}
@@ -1883,15 +2086,18 @@ An instance of \cpp{expected<E,T>} is said to be unexpected if it contains an ob
     template <class G> constexpr T value_or_throw() const&;
     template <class G> T value_or_throw() &&;
 
+    template constexpr 'see below' unwrap() const&;
+    template 'see below' unwrap() &&;
+
     // \ref{expected.object.factories}, factories
 
     template <typename Ex, typename F>
     expected<E,T> catch_exception(F&& f);
 
     template <typename F>
-      auto next(F&& func) const -> expected<E, decltype(func(val))>;
+      auto mbind(F&& func) const -> expected<E, decltype(func(val))>;
     template <typename F>
-      expected<E,T> recover(F&& f);
+      expected<E,T> catch_error(F&& f);
     template <typename F>
       auto then(F&& func) const -> expected<E, decltype(func(*this))>;
   
@@ -2551,7 +2757,7 @@ The function shall not participate in overload resolution unless: \\
 \end{wordingTextItem}
 \end{wordingPara}
 
-% value_or_throw method.
+% value_or_throw.
 \begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class G>
 constexpr T expected<E,T>::value_or_throw() const&; 
@@ -2604,6 +2810,106 @@ The function shall not participate in overload resolution unless: \\
 \end{wordingTextItem}
 \end{wordingPara}
 
+% nested copy unwrap.
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
+    template <class E, class U>
+    constexpr expected<E,U> expected<E,expected<E,U>>::unwrap() const&;
+>::unwrap() &&;
+\end{lstlisting}
+
+\begin{wordingPara}
+
+\begin{wordingTextItem}{Returns}
+If \cpp{bool(*this)} then \cpp{**this}.
+else \cpp{get_unexpected()}
+\end{wordingTextItem}
+
+\begin{wordingTextItem}{Throws}
+Any exception thrown by the selected constructor of \cpp{expected<E,U>}.
+\end{wordingTextItem}
+
+\begin{wordingTextItem}{Remarks}
+The function shall not participate in overload resolution unless: \\
+\cpp{is_copy_constructible<expected<E,T>>::value} \\
+\end{wordingTextItem}
+
+\end{wordingPara}
+
+% copy unwrap.
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
+    template <class E, class T>
+    constexpr expected<E,T> expected<E,T>::unwrap() const&;
+>::unwrap() &&;
+\end{lstlisting}
+
+\begin{wordingPara}
+
+\begin{wordingTextItem}{Returns}
+\cpp{*this}.
+\end{wordingTextItem}
+
+\begin{wordingTextItem}{Throws}
+Any exception thrown by the selected constructor of \cpp{expected<E,T>}.
+\end{wordingTextItem}
+
+\begin{wordingTextItem}{Remarks}
+The function shall not participate in overload resolution unless: \\
+\cpp{T} is not  \cpp{expected<E,U>}  and \\
+\cpp{is_copy_constructible<expected<E,T>>::value} \\
+\end{wordingTextItem}
+
+\end{wordingPara}
+
+% nested move unwrap.
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
+    template <class E, class U>
+    expected<E,T> expected<E,  expected<E,U>>::unwrap() &&;
+>::unwrap() &&;
+\end{lstlisting}
+
+\begin{wordingPara}
+
+\begin{wordingTextItem}{Returns}
+If \cpp{bool(*this)} then \cpp{std::move(**this)}.
+else \cpp{get_unexpected()}
+\end{wordingTextItem}
+
+\begin{wordingTextItem}{Throws}
+Any exception thrown by the selected constructor of \cpp{expected<E,U>}.
+\end{wordingTextItem}
+
+\begin{wordingTextItem}{Remarks}
+The function shall not participate in overload resolution unless: \\
+\cpp{is_move_constructible<expected<E,U>>::value} \\
+\end{wordingTextItem}
+
+\end{wordingPara}
+
+% move unwrap.
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
+    template <class E, class T>
+    template expected<E,T> expected<E,T>::unwrap() &&;
+>::unwrap() &&;
+\end{lstlisting}
+
+\begin{wordingPara}
+
+\begin{wordingTextItem}{Returns}
+\cpp{std::move(**this)}.
+\end{wordingTextItem}
+
+\begin{wordingTextItem}{Throws}
+Any exception thrown by the selected constructor of \cpp{expected<E,T>}.
+\end{wordingTextItem}
+
+\begin{wordingTextItem}{Remarks}
+The function shall not participate in overload resolution unless: \\
+\cpp{is_move_constructible<expected<E,T>>::value} \\
+\end{wordingTextItem}
+
+\end{wordingPara}
+
+
 \wordingSubSubSec{Factories}{expected.object.factories}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -2633,10 +2939,10 @@ returns \cpp{unwrap(expected<E, decltype(func(val))>(funct(*this)))},
 \end{wordingTextItem}
 \end{wordingPara}
 
-% next factory.
+% mbind factory.
 \begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class Ex,class F>
-auto expected<E,T>::next(F&& func) const -> unwrap_nested_expected_t<expected<E, decltype(func(val))>>;
+auto expected<E,T>::mbind(F&& func) const -> unwrap_nested_expected_t<expected<E, decltype(func(val))>>;
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
@@ -2645,10 +2951,10 @@ otherwise, returns \cpp{get_unexpected()}.
 \end{wordingTextItem}
 \end{wordingPara}
 
-% recover factory.
+% catch_error factory.
 \begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class Ex,class F>
-expected<E,T> expected<E,T>::recover(F&& func) const;
+expected<E,T> expected<E,T>::catch_error(F&& func) const;
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
@@ -2717,15 +3023,20 @@ otherwise, returns \cpp{*this}.
     
     template <typename Ex>
     bool has_exception() const;
+    
+    template constexpr 'see below' unwrap() const&;
+    template 'see below' unwrap() &&;
+
     // \ref{expected.object.void.factories}, factories
+
 
     template <typename Ex, typename F>
     expected<E,void> catch_exception(F&& f);
 
     template <typename F>
-      auto next(F&& func) const -> expected<E, decltype(func())>;
+      auto mbind(F&& func) const -> expected<E, decltype(func())>;
     template <typename F>
-      expected<void,E> recover(F&& f);
+      expected<void,E> catch_error(F&& f);
     template <typename F>
       auto then(F&& func) const -> expected<E, decltype(func(*this))>;
 
@@ -2951,9 +3262,9 @@ This proposal can be implemented as pure library extension, without any compiler
 
 We are very grateful to Andrei Alexandrescu for his talk, which was the origin of this work.
 We thanks also to every one that has contributed to the Haskell either monad, as either's interface was a source of inspiration.
-Thanks to Fernando Cacciola, Andrzej KrzemieÅ„ski and every one that has contributed to the wording and the rationalle of N3793 \cite{OptionalRev5}.
+Thanks to Fernando Cacciola, Andrzej KrzemieÅ„ski and every one that has contributed to the wording and the rationale of N3793 \cite{OptionalRev5}.
 
-Vicente thanks personnaly Evgeny Panasyuk and Johannes Kapfhammer for their remarks on the operator \cpp{expect}. 
+Vicente thanks personnaly Evgeny Panasyuk and Johannes Kapfhammer for their remarks on the DO-expression. 
 
 \newpage
 \bibliographystyle{plain}
