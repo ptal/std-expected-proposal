@@ -249,7 +249,7 @@ becomes using \texttt{expected<exception_ptr,int>}:
 expected<exception_ptr,int> f1(int i, int j, int k)
 {
   auto q = safe_divide(j, k)
-  if(q.valid()) return i + *q;
+  if(q) return i + *q;
   else return q;
 }
 \end{lstlisting}
@@ -354,10 +354,10 @@ Now let's write this code using an \cpp{expected<E,T>} type and an imperative fl
 expected<exception_ptr,int> f2(int i, int j, int k)
 {
   auto q1 = safe_divide(i, k);
-  if (!q1.valid()) return q1;
+  if (!q1) return q1;
 
   auto q2 = safe_divide(j, k);
-  if (!q2.valid()) return q2;
+  if (!q2) return q2;
 
   return *q1 + *q2;
 }
@@ -390,14 +390,14 @@ expected<exception_ptr,int> f(int i, int j, int k)
 The function \cpp{fmap} returns the first erroneous expected argument or, if they all contain a value, the result of the \cpp{plus} operation.
 
 
-Now let's rewrite this using a possible C++ language extension: adding a DO expression like the Haskel do expression. It is something similar  to the \cpp{await} extension for futures by it is not limited to futures. It works for any monad.   
+Now let's rewrite this using a possible C++ language extension: adding a DO expression like the Haskell do expression. It is something similar  to the \cpp{await} extension for futures however it is not limited to futures. It could works for any monad.   
 
 The grammar could be
 
 \begin{lstlisting}
 do-expression ::= do-initialization ':' do-expression-or-expression
 
-do-expression-or-expression ::= do-expression | expression
+do-expression-or-expression ::= do-expression | expression
 
 do-initialization ::= type var '<-' expression
 \end{lstlisting}
@@ -453,13 +453,13 @@ expected<exception_ptr,int> f2(int i, int j, int k)
 }
 \end{lstlisting}
 
-In the case of expected and optional, that is, monads that are synchronous and have only one value stored, the following macro 
+In the case of expected and optional, that is, monads that are always ready and have only one value stored, the following macro 
 
 \begin{lstlisting}
 #define EXPECT(V, EXPR) \
 auto BOOST_JOIN(expected,V) = EXPR; \
-if (! BOOST_JOIN(expected,V).valid()) return BOOST_JOIN(expected,V).get_unexpected(); \
-auto V =*BOOST_JOIN(expected,V)
+if (! has_value(BOOST_JOIN(expected,V))) return get_unexpected(BOOST_JOIN(expected,V)); \
+auto V = deref(BOOST_JOIN(expected,V))
 \end{lstlisting}
 
 can be used to obtain the same result.
@@ -677,10 +677,10 @@ An alternative name for \cpp{in_place} that is coherent with the \cpp{unexpect} 
 
 The alternative and also comprehensive initialization approach, which is not compatible with the choice to default construct \cpp{expected<E,T>} to \cpp{E()}, could be to have a variadic perfect forwarding constructor that just forwards any set of arguments to the constructor of the contained object of type \cpp{T}. 
  
-\subsection{Never-empty guaranty}
+\subsection{Almost Never-empty guaranty}
 %%%%%%%%%%%%%%%%%%
 
-As \cpp{boost::variant}, \cpp{expected<E,T>} ensures that it is never empty.
+As \cpp{boost::variant<unexpected_type<E>,T}, \cpp{expected<E,T>} ensures that it is never empty.
 All instances \cpp{v} of type \cpp{expected<E,T>} guarantee that \cpp{v} has constructed content of one of the types \cpp{T} or \cpp{E}, even if an operation on \cpp{v} has previously failed.
 
 This implies that expected may be viewed precisely as a union of exactly its bounded types. This "never-empty" property insulates the user from the possibility of undefined expected content and the significant additional complexity-of-use attendant with such a possibility.
@@ -1273,7 +1273,7 @@ This proposal doesn't include expected references as \cite{optional} doesn't  in
 \subsubsection{Expected void}
 %%%%%%%%%%%%%%%%%%
 
-While it could seem weird to instantiate optional with \cpp{void}, it has more sense for expected as expected conveys in addition, as \cpp{future<T>},  an error code. \cpp{expected<E,void>} 
+While it could seem weird to instantiate optional with \cpp{void}, it has more sense for expected as expected conveys in addition, as \cpp{future<T>},  an error code, \cpp{expected<E,void>}.
 
 \subsubsection{\cpp{NullableProxy}}
 %%%%%%%%%%%%%%%%%%
@@ -1400,7 +1400,7 @@ ei.catch_error([](auto){ return painfully_compute_default();}).mbind(use);
 \subsubsection{When all valued}
 %%%%%%%%%%
 
-However, there is yet a need to apply a function when all the expected are valued. The free functions \cpp{mbind()} and \cpp{fmap()} take a variadic continuation and a variadic number of expected parameters. The type and number of the parameters must be compatible with the continuation arguments.
+However, there is yet a need to apply a function when all the expected are valued. The free function \cpp{fmap()} takes a variadic continuation and a variadic number of expected parameters. The type and number of the parameters must be compatible with the continuation arguments.
 
 \begin{lstlisting}
  expected<exception_ptr,int> sumFirstAndSecond5(istream_range& r)
@@ -1500,7 +1500,7 @@ We can convert an \cpp{expected<E,T>} to an \cpp{optional<T>} with the possible 
 \begin{lstlisting}
 template <class T>
 optional<T> make_optional(expected<E,T> v) {
-  if (v.valid()) return make_optional(*v);
+  if (v) return make_optional(*v);
   else nullopt;
 }
 \end{lstlisting}
@@ -1510,7 +1510,7 @@ We can convert an \cpp{optional<T>} to an \cpp{expected<exception_ptr,T>} withou
 \begin{lstlisting}
 template <class T>
 expected<exception_ptr,T> make_expected(optional<T> v) {
-  if (v.valid()) return make_expected(*v);
+  if (v) return make_expected(*v);
   else make_unexpected(conversion_from_nullopt());
 }
 \end{lstlisting}
@@ -1534,14 +1534,12 @@ expected<exception_ptr,T> make_expected(future<T>&& f) {
 }
 \end{lstlisting}
 
-Remark: in line (1) we could use instead \cpp{std::future<T>::get_exception_ptr()}, which is now provided by Boost.Thread, that can be implemented by the library more efficiently than the user could do.
-
 We can create also a \cpp{future<T>} from an \cpp{expected<exception_ptr,T>}.
 
 \begin{lstlisting}
 template <class T>
 future<T> make_ready_future(expected<exception_ptr,T> e) {
-  if (e.valid()) 
+  if (e) 
     return make_ready_future(*e);
   else 
     return make_unexpected_future<T>(e.error()); 
@@ -1569,7 +1567,6 @@ fut.then([](future<int> f) {
   });
 \end{lstlisting}
 
-
 \subsection{Expected monad}
 %%%%%%%%%%%%%%%
 
@@ -1579,7 +1576,7 @@ As for the \cpp{future<T>} proposal, \cpp{expected<E,T>} provides also a way to 
 \begin{itemize}
  \item \cpp{expected<E,T>::mbind()}/\cpp{expected<E,T>::catch_error()} are the counterpart of \cpp{future<T>.then()}
  \item \cpp{expected<E,T>::unwrap()} is the counterpart of \cpp{future<T>.unwrap()}
- \item \cpp{expected<E,T>::valid()} is the counterpart of \cpp{future<T>.has_value()}
+ \item \cpp{expected<E,T>::operator bool()} is the counterpart of \cpp{future<T>.has_value()}
 \end{itemize}
 
 \subsection{Comparison between optional, expected and future}
@@ -1613,11 +1610,11 @@ The table \ref{comp-monads} presents a brief comparison between \cpp{optional<T>
 \hline
 \textbf{bool conversion} & yes & yes & no \\
 \hline
-\textbf{state} & bool()  & valid / bool() & valid / ready / (has_value, see \cite{MoreAsync}) \\
+\textbf{state} & bool()  &  bool() & valid / ready / (has_value, see \cite{MoreAsync}) \\
 \hline
 \textbf{observers} & pointer-like / value / value_or & pointer-like / value / error / value_or / value_or_throw & get / (get_exception_ptr, see \cite{MoreAsync}) \\
 \hline
-\textbf{continuations} & no & then/mbind/catch_error  & then / (next/catch_error see \cite{MoreAsync}) \\
+\textbf{visitation} & no & then/mbind/catch_error  & then / (next/recover see \cite{MoreAsync}) \\
 \hline
 \textbf{grouping} & n/a & n/a & when_all / when_any \\
 \hline
@@ -1674,7 +1671,7 @@ struct MyExpected {
   expected <T,E> v;
   MyExpected(expected <T,E> v) : v(v) {}
   T value() {  
-    if (e.valid()) return v.value();
+    if (e) return v.value();
     else throw Exception(v.error());
   }
   ...
