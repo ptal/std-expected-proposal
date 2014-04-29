@@ -1,0 +1,1425 @@
+\documentclass[xcolor=dvipsnames]{beamer}
+
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{url}
+\usepackage{lmodern}
+\usepackage{listings}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{textcomp} 
+\usepackage{hyperref}
+\usepackage{subcaption}
+\usepackage[T1]{fontenc}
+
+\usepackage{color}
+ 
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+ 
+\lstset{
+  language=c++,                % the language of the code
+  basicstyle=\footnotesize,       % the size of the fonts that are used for the code
+  numbers=left,                   % where to put the line-numbers
+  numberstyle=\tiny\color{gray},  % the style that is used for the line-numbers
+  stepnumber=1,                   % the step between two line-numbers. If it's 1, each line 
+                                  % will be numbered
+  numbersep=5pt,                  % how far the line-numbers are from the code
+  backgroundcolor=\color{white},      % choose the background color. You must add \usepackage{color}
+  showtabs=false,                 % show tabs within strings adding particular underscores
+  frame=single,                   % adds a frame around the code
+  rulecolor=\color{black},        % if not set, the frame-color may be changed on line-breaks within not-black text (e.g. comments (green here))
+  tabsize=2,                      % sets default tabsize to 2 spaces
+  captionpos=b,                   % sets the caption-position to bottom
+  breaklines=true,                % sets automatic line breaking
+  breakatwhitespace=false,        % sets if automatic breaks should only happen at whitespace
+  title=\lstname,                   % show the filename of files included with \lstinputlisting;
+                                  % also try caption instead of title
+  keywordstyle=\color{blue},          % keyword style
+  commentstyle=\color{dkgreen},       % comment style
+  stringstyle=\color{mauve},         % string literal style
+  morekeywords={expect, await, constexpr, explicit}
+}
+
+\newcommand{\cpp}[1]{\lstinline{#1}}
+
+\setbeamertemplate{footline}{\hspace*{.5cm}\scriptsize{\insertauthor\hspace*{50pt} \hfill\insertframenumber\hspace*{.5cm}}}
+
+\setbeamertemplate{section in toc}{%
+\textcolor{MidnightBlue}{$\blacktriangleright$ \inserttocsection}
+}
+
+\usecolortheme{seahorse}
+\usecolortheme{rose}
+\useoutertheme{infolines}
+
+\usecolortheme[named=SkyBlue]{structure}
+\setbeamercolor{block title}{fg=MidnightBlue}
+
+\AtBeginSection[]
+{
+  \begin{frame}<beamer>{Content}
+    \tableofcontents[currentsection,hideothersubsections]
+  \end{frame}
+} 
+
+\title{\textsc{Expected}: Exception-friendly MonadError}
+\subtitle{C++Now 2014}
+\author[\textsc{Botet},\textsc{Talbot}]{Vicente \textsc{Botet Escriba}, Pierre \textsc{Talbot} \texttt{vicente.botet@wanadoo.fr/ptalbot@hyc.io}}
+\institute[Alcatel-Lucent,UMPC]{Alcatel-Lucent International-Lannion/University of Pierre et Marie Curie-Paris (France)}
+\date[]{2014, May 16}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+%%%%%%%%%%
+
+\subsection{About us}
+%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}
+\frametitle{About Pierre Talbot}
+
+\begin{itemize}
+\item Belgian (French side).
+\item Still a student, at the University Pierre et Marie Curie in Paris.
+\item Interest in software engineering, language design and concurrency.
+\end{itemize}
+
+\begin{block}{Open-source involvement}
+\begin{itemize}
+\item \textbf{Boost C++ library} Working on Boost.Check and Boost.Expected
+\item \textbf{Wesnoth} The add-on server (UMCD).
+\end{itemize}
+\end{block}
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}
+\frametitle{About Vicente Botet Escriba}
+
+\begin{figure}[p]
+  \centering
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[scale=0.3]{images/vicente_botet.png}
+  \end{subfigure}
+  \qquad \qquad \quad
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[scale=0.3]{images/alu.jpg}
+  \end{subfigure}
+\end{figure}
+
+\begin{itemize}
+\item Spanish.
+\item Work for Alcatel-Lucent International in Lannion - France.
+\item Interest in software engineering, language design, concurrency and STM.
+\end{itemize}
+
+\begin{block}{Open-source involvement}
+\begin{itemize}
+\item \textbf{Boost C++ library} Co-author and maintainer of Boost.Ratio, Boost.Chrono, Boost.Thread and some utilities in Boost.Utility.
+\item \textbf{Toward Boost C++ library} author/co-autor of a lot of unfinished prototypes as Conversions, Stopwatch, Date, FixedPoint, Enum, Opaque, Bitfield, InterThreads, EndianExt, LUID and STM.
+\end{itemize}
+\end{block}
+\end{frame}
+
+\subsection{About Boost.Expected}
+%%%%%%%%%%%%
+\begin{frame}
+\frametitle{About Boost.Expected}
+
+\begin{itemize}
+\item Based on the original idea of Andrei Alexandrescu (Systematic Error Handling in C++).
+\item Interface based on the new \cpp{std::experimental::optional<T>} type,taking advantage of the new C++11/14 features.
+\item Extended to conform to the MonadError concept.
+\item The project born as a proposal the authors made for GSoC 2013.
+\item We are currently working on a C++ standard proposal that we expect to be ready for Rapperswil.
+\item Once the interface would be more stable we will make a portable implementation on C++98 compilers and propose it for review to Boost.
+\end{itemize}
+
+\begin{itemize}
+\item Git repository : https://github.com/ptal/Boost.Expected
+\item C++ draft proposal : http://www.hyc.io/boost/expected-proposal.pdf
+\end{itemize}
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Overview}
+
+\cpp{expected<E, T>} answer to the question "do you contain a value of type \cpp{T} or an error of type \cpp{E}?".
+
+\begin{lstlisting}
+template <class E, class T>
+class expected {
+  bool has_value_;
+  union{ 
+    T val_;
+    E err_;
+  };
+};
+\end{lstlisting}
+
+\begin{itemize}
+\item \cpp{expected<E,T> = T + unexpected_type<E>}
+\item \cpp{T != unexpected_type<E>}
+\item We want that \cpp{expected<E,T>} behaves as \cpp{T}.
+\end{itemize}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{How to create an expected object}
+
+\begin{itemize}
+\item Valued.
+\end{itemize}
+
+\begin{lstlisting}
+expected<exception_ptr, int> ei = make_expected(1); 
+expected<exception_ptr, int> ej{2}; // alternative syntax
+expected<exception_ptr, int> ek = ej; // ek has value 2
+
+expected<exception_ptr,MoveOnly> el{in_place, "arg"};        
+expected<exception_ptr,MoveOnly> el{expect, "arg"};        
+  // calls MoveOnly{"arg"} in place
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{How to create an unexpected object}
+
+\begin{itemize}
+\item Unexpected.
+\end{itemize}
+
+\begin{lstlisting}
+expected<errc, int> ek = make_unexpected(errc::invalid);
+
+expected<string,int> em{unexpect, "arg"};        
+  // unexpected value, calls string{"arg"} in place
+
+expected<string,int> e;  // e is unexpected...
+ei = {}; // reset to unexpected
+\end{lstlisting}
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Observing an expected object}
+
+\begin{itemize}
+\item Explicit conversion to bool.
+\item \cpp{operator*()} narrow contract
+\end{itemize}
+
+\begin{lstlisting}
+if (expected<exception_ptr, char> ch = readNextChar()) {
+  process_char(*ch);
+}
+\end{lstlisting}
+
+\begin{itemize}
+\item \cpp{value()} wide contract
+\end{itemize}
+
+\begin{lstlisting}
+expected<errc,int> ei = str2int(s);
+try {
+    process_int(ei.value());
+} 
+catch(bad_expected_access const&) {
+    std::cout << "this was not a number";
+}
+\end{lstlisting}
+
+\end{frame}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Expected Library by Example}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{\cpp{safe_divide}}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{safe\_divide exception-based style}
+
+\begin{lstlisting}
+struct DivideByZero: public std::exception {...};
+\end{lstlisting}
+
+\begin{lstlisting}
+int safe_divide(int i, int j)
+{
+  if (j==0) throw DivideByZero();
+  else return i / j;
+}
+\end{lstlisting}
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{safe\_divide Expected-based style}
+
+\begin{lstlisting}
+Expected<int> safe_divide(int i, int j)
+{
+  if (j==0) return Expected<int>::from_error(DivideByZero());
+  else return Expected<int>(i / j);
+}
+\end{lstlisting}
+\begin{itemize}
+  \item (3,4) redondant use of  \cpp{Expected<int>}. 
+\end{itemize}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{safe\_divide expected-based style}
+
+Using \cpp{boost::expected<exception_ptr, int>} to carry the error condition.
+
+\begin{lstlisting}
+expected<exception_ptr,int> safe_divide(int i, int j)
+{
+  if (j==0) return make_unexpected(DivideByZero());
+  else return i / j;
+}
+\end{lstlisting}
+
+\begin{itemize}
+  \item (3) uses implicit conversion from \cpp{unexpected_type<E>} to \cpp{expected<E, T>}. 
+  \item (4) uses implicit conversion from \cpp{T} to \cpp{expected<E, T>}.
+\end{itemize}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{safe\_divide expected-style  - getting the value or an exception}
+
+\begin{itemize}
+  \item The caller obtains the stored value using the member \cpp{value()} function.
+\end{itemize}
+
+\begin{lstlisting}
+  auto x = safe_divide(i,j).value(); // throw on error
+\end{lstlisting}
+
+\begin{itemize}
+  \item The caller can also store the expected value and check if a value is stored using the bool conversion  function.
+\end{itemize}
+
+\begin{lstlisting}
+  auto x = safe_divide(i,j); // won't throw
+  if (! x) 
+    int i = x.value(); // just "re"throw the stored exception
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{i + j/k} expected-style  - getting the value when available}
+
+\begin{itemize}
+  \item When the user knows that there is a value it can use the narrowed contact \cpp{operator*()}.
+\end{itemize}
+
+\begin{lstlisting}
+expected<exception_ptr,int> f1(int i, int j, int k)
+{
+  auto q = safe_divide(j, k)
+  if(q) return i + *q;
+  else return make_unexpected(q);
+}
+\end{lstlisting}
+
+\end{frame}
+\subsection{\cpp{i + j/k}}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{i + j/k}  - functional style}
+
+\begin{lstlisting}
+expected<exception_ptr,int> f1(int i, int j, int k)
+{
+  return safe_divide(j, k).mbind([i](int q){return i + q;});
+}
+\end{lstlisting}
+
+The \cpp{mbind} members calls the provided function if expected contains a value, otherwise it forwards the error to the callee. 
+
+Alternative using an existing functor.
+
+\begin{lstlisting}
+expected<exception_ptr,int> f1(int i, int j, int k)
+{
+  return safe_divide(j, k).mbind(bind(add, i, _1)));
+}
+\end{lstlisting}
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{safe\_divide  - exception-based Multiple error conditions}
+
+\begin{lstlisting}
+struct NotDivisible: public std::exception {
+  int i, j;
+  NotDivisible(int i, int j) : i(i), j(j) {}
+};
+
+int safe_divide(int i, int j) {
+  if (j == 0) throw DivideByZero(); 
+  if (i%j != 0) throw NotDivisible(i,j);
+  else return i / j; 
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+T divide(T i, T j) {
+  try  {    return safe_divide(i,j)  }
+  catch(NotDivisible& ex)  {    return ex.i/ex.j;  }
+  catch(...)  {    throw;  }
+}
+\end{lstlisting}
+\end{frame}
+\subsection{\cpp{divide}}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{safe\_divide  - expected-based Multiple error conditions}
+
+\begin{lstlisting}
+expected<exception_ptr,int> safe_divide(int i, int j) {
+  if (j == 0) return make_unexpected(DivideByZero()); 
+  if (i%j != 0) return make_unexpected(NotDivisible(i,j));
+  else return i / j; 
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+expected<exception_ptr,int> divide(int i, int j) {
+  auto e = safe_divide(i,j);
+  if(e.has_exception<NotDivisible>()) return i/j;
+  else return e;
+}
+\end{lstlisting}
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{safe\_divide  - expected-based Multiple error conditions}
+
+
+\begin{lstlisting}
+expected<exception_ptr,int> divide(int i, int j) {
+  return safe_divide(i,j)
+  .catch_exception<NotDivisible>([](auto &ex)
+    return ex.i/ex.j;
+  });
+}
+\end{lstlisting}
+
+\end{frame}
+\subsection{\cpp{i/k + j/k}}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{i/k + j/k}  - scale}
+
+\begin{itemize}
+  \item exception-based.
+\end{itemize}
+
+\begin{lstlisting}
+int f2(int i, int j, int k) {
+  return safe_divide(i,k) + safe_divide(j,k);
+}
+\end{lstlisting}
+
+\begin{itemize}
+  \item expected-based.
+\end{itemize}
+
+\begin{lstlisting}
+expected<exception_ptr,int> f2(int i, int j, int k) {
+  auto q1 = safe_divide(i, k);
+  if (!q1) return make_unexpected(q1);
+
+  auto q2 = safe_divide(j, k);
+  if (!q2) return make_unexpected(q2);
+
+  return *q1 + *q2;
+}
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{i/k + j/k}  - scale}
+
+\begin{itemize}
+  \item expected-based functional style.
+\end{itemize}
+
+\begin{lstlisting}
+expected<exception_ptr,int> f(int i, int j, int k) {
+  return safe_divide(i, k).mbind([=](int q1) {
+      return safe_divide(j,k).mbind([=](int q2) {
+        return q1+q2;
+      });
+    });
+}
+\end{lstlisting}
+\begin{lstlisting}
+auto add = [](int s1, int s2){ return s1+s2; };
+expected<exception_ptr,int> f(int i, int j, int k){
+  return fmap(add, safe_divide(i, k), safe_divide(j, k));
+}
+\end{lstlisting}
+
+\end{frame}
+\subsection{do-expression}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{language-like style  - error propagation}
+C++ language extension: Based on the Haskell do-expression. Something similar to the \cpp{await} expression for futures.  
+
+\begin{lstlisting}
+do_expression ::= do_initialization ':' do_expression_or_expression
+do_expression_or_expression := 
+    do_expression | expression
+do_initialization := type var '<-' expression
+\end{lstlisting}
+
+\begin{itemize}
+  \item Transformation semantics.
+\end{itemize}
+
+\begin{lstlisting}
+[[do_expression]] =
+  expression.mbind([&](type var) {
+    return [[do_expression_or_expression]]   });
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{i/k + j/k}  - do-expression}
+
+\begin{lstlisting}
+expected<exception_ptr,int> f2(int i, int j, int k) {
+  return ( auto s1 <- safe_divide(i, k) :
+           auto s2 <- safe_divide(j, k) :
+           s1 + s2  
+  );
+}
+\end{lstlisting}
+\begin{itemize}
+  \item Transformation semantics.
+\end{itemize}
+\begin{lstlisting}
+expected<exception_ptr,int> f2(int i, int j, int k) {
+  return safe_divide(i, k).mbind([&](auto s1) {
+    return safe_divide(j, k).mbind([&](auto s2) {
+      return s1 + s2;
+    });
+  }); 
+}
+\end{lstlisting}
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{i/k + j/k}  - DO-macro}
+
+\begin{lstlisting}
+expected<exception_ptr,int> f2(int i, int j, int k) {
+  return DO (
+    ( s1, safe_divide(i, k) )
+    ( s2, safe_divide(j, k) )
+    s1 + s2 
+  );
+}
+\end{lstlisting}
+
+\end{frame}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{i/k + j/k}  - EXPECT-macro}
+
+\begin{lstlisting}
+#define EXPECT(V, EXPR) \
+auto BOOST_JOIN(expected,V) = EXPR; \
+if (!  BOOST_JOIN(expected,V)) 
+  return make_unexpected(BOOST_JOIN(expected,V).error()); \
+auto V =*BOOST_JOIN(expected,V)
+\end{lstlisting}
+
+\begin{lstlisting}
+expected<exception_ptr,int> f2(int i, int j, int k) {
+  EXPECT(s1, safe_divide(i, k) );
+  EXPECT(s2, safe_divide(j, k));
+  return s1 + s2;
+}
+\end{lstlisting}
+
+\end{frame}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{getIntRange }
+%%%%%%%%%%%%
+
+\begin{frame}[fragile]
+\frametitle{getIntRange - exception based}
+
+Given
+\begin{lstlisting}
+  int getInt(istream_range& r);
+  void matchesString(std::string, istream_range& r);
+\end{lstlisting}
+
+\begin{lstlisting}
+pair<int,int> getIntRange(istream_range& r) 
+{
+    auto f = getInt(r);
+             matchesString("..", r);
+    auto l = getInt(r);       
+    return make_pair(f, l);
+}
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{getIntRange - expect based}
+
+Given
+\begin{lstlisting}
+  expected<errc, int> getInt(istream_range& r);
+  expected<errc, void> matchesString(istream_range& r);
+\end{lstlisting}
+
+\begin{lstlisting}
+expected<errc, pair<int, int>> getIntRange(istream_range& r) 
+{
+  return 
+    auto  f <- getInt(r) : 
+               matchedString("..", r) : 
+    auto  l <- getInt(r) :
+    std::make_pair(f, l);
+}
+\end{lstlisting}
+
+\end{frame}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Behind the scenes}
+%%%%%%%%%%%%
+
+\subsection{Unexpected Type}
+%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{class unexpected\_type<E>}
+
+Between explicit and implicit conversion.
+
+Building an explicit type that is implicitly convertible to another type.
+
+E.g. \cpp{imaginary<T>} is explicitly convertible from a \cpp{T} and \cpp{complex<T>} could be implicitly convertible from \cpp{imaginary<T>}. 
+
+\begin{lstlisting}
+template <class E=std::exception_ptr>
+class unexpected_type {
+public:
+    unexpected_type() = delete;
+    constexpr explicit unexpected_type(E e) 
+        : error_(e) {}   
+    constexpr E value() const  { return error_; }                              
+}; 
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{class unexpected\_type<std::exception\_ptr> specialization}
+
+\begin{lstlisting}
+template <>
+class unexpected_type<std::exception_ptr> {
+    E error_;
+public:
+    unexpected_type() = delete;
+    explicit unexpected_type(std::exception_ptr e) 
+        :  error_(e) {}
+    template <class E>
+    explicit unexpected_type(E e) 
+         : error_(std::make_exception_ptr(e)) {}     
+    std::exception_ptr value() const { return error_; }                              
+}; 
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{unexpected factories}
+
+\begin{lstlisting}
+template <class E>
+constexpr unexpected_type<decay_t<E>> make_unexpected(E v)  {
+    return unexpected_type<decay_t<E>> (ex);
+}
+
+unexpected_type<> 
+  make_unexpected_from_current_exception() {
+    return unexpected_type<> (std::current_exception());
+}
+
+template <class T, class E>
+constexpr 
+unexpected_type<E> make_unexpected(expected<E, T> v)  {
+    return unexpected_type<E>(error());
+}
+
+\end{lstlisting}
+\end{frame}
+
+\subsection{Expected Type}
+%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{expected<E, T> conversions from/to unexpected\_type<E>}
+
+
+\begin{lstlisting}
+template <class E, class T>
+class expected {
+  // ...
+  constexpr expected(unexpected_type<E>&& e);
+  expected&  operator=(unexpected_type<E>&& e);
+  
+};
+\end{lstlisting}
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{expected<E, T> conversions from/to unexpected\_type<E>}
+
+\begin{lstlisting}
+template <class T>
+class expected<std::exception_ptr,T> {
+  // ...
+  constexpr expected(std::exception_ptr&& e);
+  expected&  operator=(std::exception_ptr&& e);
+  template <class E>
+  constexpr expected(unexpected_type<E>&& e);
+  template <class E>
+  expected&  operator=(unexpected_type<E>&& e);
+
+  // ...  
+  constexpr unexpected_type<std::exception_ptr> 
+};
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{expected factories}
+
+\begin{lstlisting}
+template<typename T>
+constexpr expected<std::exception_ptr, decay_t<T> > 
+  make_expected(T&& v ) ;
+expected<std::exception_ptr, void> make_expected();
+template <typename T, typename E>
+expected<std::exception_ptr, T> 
+  make_expected_from_exception(E e)
+template <typename T, typename E>
+constexpr expected<decay_t<E>, T> 
+  make_expected_from_error(E e);
+\end{lstlisting}
+\begin{lstlisting}
+auto e1 = make_expected(2); // expected<exception_ptr,int>
+auto e2 = make_expected_from_exception<int>(bad_alloc()); 
+		// expected<exception_ptr,int>
+auto e3 = make_expected_from_error<int>(errc::invalid); 
+		// expected<errc,int>
+\end{lstlisting}
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{expected<E> as a type constructor}
+
+\begin{lstlisting}
+auto e1 = make_expected<errc>(2); // compile fails
+auto e1 = expected<errc,int>(2);  // int is redondant
+auto e2 = expected<errc>::make(2);  // no redondant
+\end{lstlisting}
+
+\begin{lstlisting}
+template <typename E=std::exception_ptr, class T=holder>
+class expected;
+template <typename E>
+class expected<E,holder> {
+public:
+  template <class T> using type = expected<E,T>;
+  template <class T> expected<E,T> make(T&& v) {
+    return expected<E,T>(std::forward(v));
+  }
+};
+\end{lstlisting}
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Heterogeneous type factories}
+
+\begin{lstlisting}
+auto e1 = make_expected(2); 
+auto e2 = expected<>::make(2); 
+auto e2 = expected<errc>::make(2);
+
+auto o = make_optional(2); 
+auto f = make_ready_future(2); 
+\end{lstlisting}
+
+\begin{itemize}
+  \item Non-uniform syntax -> no generic algorithms 
+\end{itemize}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Uniform type factories - type constructor}
+
+\begin{itemize}
+  \item Type constructor 
+\end{itemize}
+
+\begin{lstlisting}
+auto e2 = make<expected<>>(2); 
+auto e2 = make<expected<errc>>(2);
+auto o = make<optional<>>(2); 
+auto f = make<future<>>(2); 
+\end{lstlisting}
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{expected<E>} as a type constructor}
+
+\begin{lstlisting}
+auto e = make<expected<errc>>(2); 
+// e has type expected<errc, int>
+auto e = make<expected<>>(2); 
+// e has type expected<exception_ptr, int>
+\end{lstlisting}
+
+\begin{lstlisting}
+template<class F, class... Args>
+using apply = typename F::template type<Args...>;
+\end{lstlisting}
+  
+\begin{lstlisting}
+template<typename TC, class T>
+constexpr apply<TC,decay_t<T>> make(T&& v )  {
+  return apply<TC,decay_t<T>>(std::forward(v))
+}
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Uniform type factories - Lifting }
+
+\begin{itemize}
+  \item Lifting variadic template class to create a type constructor 
+\end{itemize}
+
+\begin{lstlisting}
+template <template <class ...> class F, class... Args>
+struct lift {
+  template<class... Args2> using type = F<Args..., Args2...>;
+};
+\end{lstlisting} 
+
+\begin{lstlisting}
+auto e2 = make<lift<expected, exception_ptr>>(2); 
+auto e2 = make<lift<expected, errc>>(2);
+auto o = make<lift<optional>>(2); 
+auto f = make<lift<future>>(2); 
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{lift<future>} as a  type constructor}
+
+\begin{itemize}
+  \item However, \cpp{future<T>} is not explicitly constructible from \cpp{T}.
+\end{itemize}
+
+\begin{lstlisting}
+auto f = make_ready_future(2); 
+auto f = make<lift<future>>(2); 
+\end{lstlisting}
+
+\begin{itemize}
+  \item We need an indirection.
+\end{itemize}
+
+\begin{lstlisting}
+template<class M, class T, 
+         class Mo = apply<M, decay_t<T>> 
+         >
+Mo make(T&& v )  {
+    return Mo::make(std::forward<T>(v));
+}
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{future<T>} mapping}
+
+\begin{lstlisting}
+template<class U>
+struct monad_traits<future<U>> { 
+  template<class M, class T> 
+  future<decay_t<T>> make(T&& v )  {
+    return make_ready_future(std::forward<T>(v));
+  }
+  // ...
+};
+\end{lstlisting}
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Differences between \cpp{expected<errc, T>} and \cpp{expected<exception_ptr, T>}}
+
+\begin{tabular}{|c|c|c|}
+\hline
+                    & \cpp{expected<errc, T>} & \cpp{expected<exception_ptr, T>}  \\
+\hline
+\textbf{never-empty warranty} & \cpp{E()} & almost yes \\
+\hline
+\textbf{has\_exception} & no & yes \\
+\hline
+\textbf{catch\_exception} & no & yes \\
+\hline
+\textbf{all non valued equal} & no & yes \\
+\hline
+\end{tabular}
+\end{frame}
+
+\subsection{Related types}
+%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{boost::variant<unexpected_type<E>,T>} Comparison}
+
+\begin{tabular}{|c|c|c|}
+\hline
+                    & \textbf{variant} & \textbf{expected}  \\
+\hline
+\textbf{never-empty warranty} & yes & almost yes \\
+\hline
+\textbf{factories} & no & yes  \\
+\hline
+\textbf{value\_type} & no & yes  \\
+\hline
+\textbf{default constructor} & yes (if E is ) & yes (if E is )  \\
+\hline
+\textbf{observers} & get<T>/get<E> & value / error   \\
+\hline
+\textbf{visitation} & apply\_visitor & fmap/mbind/catch\_error  \\
+\hline
+\end{tabular}
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{std::future<T>} Comparison}
+
+\begin{tabular}{|c|c|c|}
+\hline
+                    & \textbf{future} & \textbf{expected}  \\
+\hline
+\textbf{specific null value} & no & no \\
+\hline
+\textbf{relational operators} & no & yes \\
+\hline
+\textbf{factories} & make\_ready\_future & make\_expected  \\
+\hline
+\textbf{emplace} & no & yes \\
+\hline
+\textbf{value\_type} & no & yes  \\
+\hline
+\textbf{default constructor} & yes(invalid) & yes (E() )  \\
+\hline
+\textbf{observers} & get / wait & operator* / value / error   \\
+\hline
+\textbf{visitation} & then & fmap/mbind/catch\_error  \\
+\hline
+\textbf{grouping}  &  when\_all / when\_any &  n.a. \\
+\hline
+\end{tabular}
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Conversions from/to ready std::experimental::future<T> }
+
+\begin{lstlisting}
+template <class T>
+expected<exception_ptr,T> make_expected(future<T>&& f) {
+  assert (f.ready() && "future not ready");
+  try {
+    return f.get();
+  } catch (...) {
+    return make_unexpected_from_exception();
+  }
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+template <class T>
+std::future<T> make_ready_future(expected<exception_ptr, T>&& e) {
+  if (e) return make_ready_future(*e);
+  else return make_unexpected_future<T>(e.error()); 
+}
+\end{lstlisting}
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{make\_unexpected\_future }
+
+\begin{lstlisting}
+template <class T, class E>
+std::future<T> make_unexpected_future(E e)  {
+  std::promise<T> p;
+  std::future<T> f = p.get_future();
+  p.set_exception(std::make_exception_ptr(e));
+  return std::move(f);
+}
+\end{lstlisting}
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{make\_expected alternative implementation }
+
+Implementations of  \cpp{future<T>} that store the exception on a  \cpp{exception_ptr}, could define this function as a friend function and make it more efficient.   
+
+\begin{lstlisting}
+template <class T>
+expected<exception_ptr, T> make_expected(future<T>&& f) {
+  assert (f.ready() && "future not ready");
+  lock_guard<mutex> lk(f.get_mutex());
+  if (f.has_value(lk)) return f.get(lk);
+  else return make_unexpected(f.get_exception_ptr(lk));
+}
+\end{lstlisting}
+
+\end{frame}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{std::experimental::optional<T> Comparison}
+
+\cpp{expected<E, T>} is as an \cpp{std::experimental::optional} that collapse all the values of \cpp{E} to \cpp{nullopt}.
+
+\begin{tabular}{|c|c|c|}
+\hline
+                    & \textbf{optional} & \textbf{expected}  \\
+\hline
+\textbf{specific null value} & yes & no \\
+\hline
+\textbf{relational operators} & yes & yes \\
+\hline
+\textbf{swap} & yes & yes \\
+\hline
+\textbf{factories} & make\_optional & make\_expected  \\
+\hline
+\textbf{value\_type} & no & yes  \\
+\hline
+\textbf{default constructor} & yes(nullopt)  & yes (E() )  \\
+\hline
+\textbf{observers} & value  & value / error   \\
+\hline
+\textbf{visitation} & no & fmap/mbind/catch\_error  \\
+\hline
+\end{tabular}
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{std::experimental::optional<T> Conversions}
+\begin{lstlisting}
+template <class T>
+optional<T> make_optional(expected<E, T> v) {
+  if (v) return make_optional(*v);
+  else nullopt;
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+struct conversion_from_nullopt {};
+template <class T>
+expected<exception_ptr, T> make_expected(optional<T> v) {
+  if (v) return make_expected(*v);
+  else make_unexpected(conversion_from_nullopt());
+}
+\end{lstlisting}
+\end{frame}
+
+\subsection{Operators}
+
+\section{Functional}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Motivation}
+
+Problem:
+
+\begin{itemize}
+  \item We want too define some algorithms that work for \cpp{expected<E,T>}, \cpp{optional<T>} and \cpp{future<T>} between other.
+  \item While these share a common underlying semantic, the interface is different.
+\end{itemize}
+
+Two alternatives:
+
+\begin{itemize}
+  \item Direct: the model must provide the specific operations to conform to the Concept, E.g. the expression \cpp{*e} is well formed.
+  \item Indirect: the developer of the model adapts the model to the concept. E.g. the Concept requires that expression \cpp{deref(e)} is well formed and the Model mapping states how this operation is implemented using the Model.
+\end{itemize}
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Advantages/Liabilities}
+
+\begin{itemize}
+  \item The direct alternative would need to change the interface of the Model to conform to the Concept or,
+    \item define the concept in terms of non-member functions.
+   \item The indirect alternative is more open but introduces a lot of non-member members. 
+   \item To avoid the proliferation of possible clashes, the concept members are defined on a specific namespace associated for the concept. 
+\end{itemize}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Automatic concept mapping?}
+
+Should the mapping be automatic, that is, have a default mapping that is applied implicitly if the type conform to some syntactical requirements? 
+
+\begin{itemize}
+  \item While concepts are more than syntax the explicit mapping would be cumbersome. 
+\end{itemize}
+
+Could several types share the same mapping?
+
+\begin{itemize}
+  \item Several types could already be a model of another Concept that can be used to implement the mapping. 
+\end{itemize}
+
+
+\end{frame}
+\subsection{Rebindable}
+%%%%%%%%%%%%
+
+\begin{frame}[fragile]
+\frametitle{Rebindable features}
+
+Rebindable is a basic concept that provides a way to
+
+\begin{itemize}
+  \item \cpp{value_type<M>} : obtain the type of the underlying value, 
+  \item \cpp{type_constructor<M>} : obtain the type constructor. 
+  \item \cpp{rebind<M,T>} : build another type substituting the underlying value type. 
+\end{itemize}
+
+satisfying 
+
+\begin{lstlisting}
+is_same<apply<type_constructor<M>, value_type<M>>, M>::value
+is_same<type_constructor<apply<TC, U>>, TC>::value
+is_same<rebind<M, value_type<M>>, M>::value
+is_same<rebind<M, U>, apply<type_constructor<M>,U>>::value
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Rebindable features}
+
+Where
+
+\begin{lstlisting}
+template<class F, class... Args>
+using apply = typename F::template type<Args...>;
+\end{lstlisting}
+
+Examples:
+\begin{itemize}
+  \item pointers:  \cpp{T*}, 
+  \item smart pointers: \cpp{shared_ptr<T>}, 
+  \item containers, \cpp{vector<T>},  \cpp{array<T,N>},  \cpp{T[N]} 
+  \item wrappers: \cpp{optional<T>}, \cpp{expected<E, T>}, \cpp{future<T>},
+  \item other: \cpp{allocator<T>}   
+\end{itemize}
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{PossiblyValued}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{PossiblyValued features}
+
+PossibleValued is a refinement of a Rebindable  concept that allows to
+
+\begin{itemize}
+  \item \cpp{has_value(m)}: check if a value is present.
+  \item \cpp{deref(m)}: obtain a reference to the value. (defined only if \cpp{has_value}).
+  \item \cpp{value(m)}: get a reference to the stored value or throw an exception.
+  
+  \item \cpp{error_type<M>}: obtain the associated error type.
+  \item \cpp{error(m)}: get a reference to the stored error (defined only if \cpp{has_value} is false).
+  
+  \item \cpp{errored_type<M>}: obtain the associated errored type, which is implicitly convertible to the model.
+  \item \cpp{make_errored(m)}: get a value storing the stored error that is convertible to the model. 
+ 
+\end{itemize}
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{PossiblyValued algorithms}
+
+\begin{lstlisting}
+template <class PV> 
+// requires PossibleValued<PV> 
+// && EqualityComparable<value_type<PV>>
+constexpr bool equal( const PV& x, const PV& y ) {
+  using namespace possibly_valued;
+  return has_value(x) != has_value(y) ? false 
+       : ( has_value(x) ? deref(x) == deref(y) : true );
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+template <class PV, class U> 
+// requires PossibleValued<PV> 
+// && Convertible<value_type<PV>,U>
+constexpr value_type<PV> value_or( const PV& x, U&& y ) {
+  using namespace possibly_valued;
+  return has_value(x) ? deref(x) : value_type<PV>(y); 
+}
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Functor}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{C++ 'Functor'}
+
+\cpp{Functor} is a refinement of Rebindable for type wrappers that can be mapped over.  It provides a
+
+\begin{itemize}
+  \item \cpp{fmap(f,m)}: traverse a functor applying a function".
+\end{itemize}
+        
+satisfying
+
+\begin{lstlisting}
+bind(fmap,id,_1)  ==  bind(id,_1)
+bind(fmap, compose(f, g), _1)  ==  
+        compose(bind(fmap, f,_1), bind(fmap, g, _1)
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{C++ Functor - Specialization for PossibleValued}
+       
+Specialization for models of \cpp{PossibleValued}       
+
+\begin{lstlisting}
+template <class F, class M>
+// requires Functor<M> && Invokable<F, value_type<M>>
+rebind<M, result_of_t<F(value_type<M>)> fmap(F&& f, M&& m) {
+  using namespace possibly_valued;
+  return has_value( forward<M>(m))
+  ? forward<F>(f)( deref( forward<M>(m) ) )
+  : make_errored(m);
+}
+\end{lstlisting}
+         
+\end{frame}
+
+\subsection{Monad}
+%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Monad}
+
+\cpp{Monad} is a refinement of \cpp{Functor} concept  providing a way to:
+
+\begin{itemize}
+  \item \cpp{make<M>(v)}: build a monad instance from the underlying value type.
+  \item \cpp{mbind(m, f)} : binds a function that will be called only if the action associated to the Monad succeeds.
+  \item \cpp{mdo(m1, m2)} : sequentially compose two actions, discarding any value produced by the first.
+\end{itemize}
+
+satisfying
+
+\begin{lstlisting}
+mbind(make<M>(x), f)  ==  f(x)
+mbind(m, [](auto x) { return make<M>(x);} )  ==  m
+mbind(m, [](auto x) { return mbind(f(x), g); }  ==  
+           mbind(mbind(m, f), g)
+
+fmap(f, m)  ==  
+  mbind(m, compose([](auto x) { return make<M>(x);}, f))
+\end{lstlisting}
+\end{frame}
+
+\subsection{MonadError}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{MonadError}
+
+A MonadError is a Monad which can store errors of different types.
+
+\begin{itemize}
+  \item \cpp{make_error<M>(e)}: signal an error on a monadic function.
+  \item \cpp{catch_error(m, f)}: possibly recover from previous errors and return to normal execution.
+\end{itemize}
+
+Should satisfy the laws:
+
+\begin{lstlisting}
+  fmap(make_error<M>(e),  f) == make_error<M>(e)
+  mbind(make_error<M>(e),  f) == make_error<M>(e)
+  mdo(make_error<M>(e),  f) == make_error<M>(e)
+  catch_error(make<M>(v),  f) == make<M>(v)
+\end{lstlisting}
+\end{frame}
+
+\subsection{MonadException}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{MonadException}
+
+A MonadException is a MonadError which can store errors of different types.
+
+\begin{itemize}
+  \item \cpp{make_exception(e)}: signal an exception on a monadic function.
+  \item \cpp{has_exception<E>()} : check if the stored exception is of the type parameter \cpp{E}.
+  \item \cpp{catch_exception<E>(m, f)}: possibly recover from previous exception and return to normal execution.
+\end{itemize}
+
+Examples
+\begin{itemize}
+  \item \cpp{expected<exception_ptr,T>} 
+  \item \cpp{expected<any,T>} 
+  \item \cpp{expected<variant<E1, ..., En>,T>} 
+  \item \cpp{future<T>} 
+  \item \cpp{shared_future<T>} 
+\end{itemize}
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{MonadException catch\_exception example}
+
+\begin{lstlisting}
+template <class M> apply<M, int> safe_divide(int i, int j)  
+{
+  using namespace boost::functional::monad_exception;
+  if (j == 0) return make_exception<M>(DivideByZero());
+  else return make<M>(i / j);
+}
+template <class M> apply<M, int> divide(int i, int j)  
+{
+  using namespace boost::functional::monad_exception;
+  return catch_exception<NotDivisible>(
+    safe_divide<M>(i,j), 
+    [](auto& e)  { return make<M>(e.i / e.j);  }
+  );
+}
+//...
+  auto a = divide<expected<>>(1, 0);
+\end{lstlisting}
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Open Points, Future Work and Conclusions}
+%%%%%%%%%%%
+
+\begin{frame}
+\frametitle{Open Points ...}
+%%%%%%%%%%%%
+
+\begin{itemize}
+  \item Should the \cpp{operator==} collapse all the errors?
+  \item Should \cpp{expected<errc,T>} and \cpp{expected<exception_ptr,T>} be represented by two different classes?
+  \item Should \cpp{expected<E,T>} throw E?
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}
+\frametitle{Future Work ...}
+%%%%%%%%%%%%
+
+\begin{itemize}
+  \item Allocator support for expected.
+  \item Define a common visitation interface for \cpp{any}, \cpp{variant<E1, ..., En>}, \cpp{exception_ptr}.
+  \item Work on a separated Monads library.
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}
+\frametitle{Conclusions}
+%%%%%%%%%%%%
+\begin{itemize}
+  \item \cpp{expected<E, T>} monadic functions are useful tools, 
+  \item that allows to combine functions that return \cpp{expected<E, T>} but,
+  \item it would be much easier to use it with a specific do-expression.
+\end{itemize}
+
+\begin{itemize}
+  \item \cpp{expected<E, T>}, \cpp{future<T>} and \cpp{optional<T>} share a lot of things but have some differences.
+  \item Defining a common interface for the functions that have the same behavior allows us to define generic algorithms on top of these concepts.
+  \item Having a monadic common interface would be one step towards this goal.
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}
+%%%%%%%%%%%%
+\begin{center}
+\Large{Thanks for your attention!}
+\end{center}
+\begin{center}
+\Large{Questions?}
+\end{center}
+\end{frame}
+
+
+
+\end{document}
