@@ -619,13 +619,13 @@ Additionally, within the affordable limits, we propose the view that \cpp{expect
 \begin{lstlisting}
 expected<string, int> ei = 0;
 expected<string, int> ej = 1;
-expected<string, int> ek = make_unexpected(string());
+expected<string, int> ek = make_unexpected(string("fail"));
 
 ei = 1;
-ej = make_unexpected(E());;
+ej = make_unexpected(string("fail"));;
 ek = 0;
 
-ei = make_unexpected(E());;
+ei = make_unexpected(string("fail"));;
 ej = 0;
 ek = 1;
 \end{lstlisting}
@@ -692,7 +692,7 @@ This implies that expected may be viewed precisely as a union of exactly its bou
 \item \cpp{std::experimental::optional<T>} default constructs to an optional with no value. 
 \item \cpp{boost::variant<T,E>} default constructs to a variant with the value \cpp{T()} it \cpp{T} is default constructible or to the value \cpp{E()} it \cpp{E} is default constructible or it is ill formed otherwise. 
 \item \cpp{std::future<T>} default constructs to an invalid future with no shared state associated, that is, no value and no exception.
-\item \cpp{std::experimental::optional<T>} default constructot is equivalent to \cpp{boost::variant<nullopt_t, T>}.
+\item \cpp{std::experimental::optional<T>} default constructor is equivalent to \cpp{boost::variant<nullopt_t, T>}.
 \end{itemize}
 
 \begin{itemize}
@@ -897,7 +897,7 @@ This function can be implemented easily using the bool conversion and the derefe
     else throw bad_expected_access(e.error());
   }
   template <class E, class T>
-  contexpr T & value(expected<E,T> const& e)
+  contexpr T & value(expected<E,T> & e)
   {
     if(e) return *e;
     else throw bad_expected_access(e.error());
@@ -909,7 +909,7 @@ This function can be implemented easily using the bool conversion and the derefe
     else rethrow_exception(e.error());
   }
   template <class T>
-  contexpr T & value(expected<exception_ptr,T> const& e)
+  contexpr T & value(expected<exception_ptr,T> & e)
   {
     if(e) return *e;
     else rethrow_exception(e.error());
