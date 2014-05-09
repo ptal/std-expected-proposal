@@ -260,18 +260,18 @@ However \cpp{expected<E,T>} delivers cleaner code when used in a functional styl
 \begin{lstlisting}
 expected<exception_ptr,int> f1(int i, int j, int k)
 {
-  return safe_divide(j, k).mbind([&](int q){
+  return safe_divide(j, k).fmap([&](int q){
     return i + q;
   });
 }
 \end{lstlisting}
 
-The \cpp{mbind} members calls the continuation provided if expected contains a value, otherwise it forwards the error to the callee. Using lambda function might clutter the code, so here an example using functor:
+The \cpp{fmap} members calls the continuation provided if expected contains a value, otherwise it forwards the error to the callee. Using lambda function might clutter the code, so here an example using functor:
 
 \begin{lstlisting}
 expected<exception_ptr,int> f1(int i, int j, int k)
 {
-  return safe_divide(j, k).mbind(bind(plus, i, _1));
+  return safe_divide(j, k).fmap(bind(plus, i, _1));
 }
 \end{lstlisting}
 
@@ -363,13 +363,13 @@ expected<exception_ptr,int> f2(int i, int j, int k)
 }
 \end{lstlisting}
 
-This is nice in the sense that whenever there is an error we get a specific error result. However the ``clean code'' characteristic introduced in section \ref{motiv-scope} is not well-respected as the readability doesn't differ much from the ``C return code''. We can rewrite this using a functional style using the member function \cpp{fbind}\footnote{\cpp{fbind} stands for ``monadic bind''.}:as follows:
+This is nice in the sense that whenever there is an error we get a specific error result. However the ``clean code'' characteristic introduced in section \ref{motiv-scope} is not well-respected as the readability doesn't differ much from the ``C return code''. We can rewrite this using a functional style using the member function \cpp{mbind}\footnote{\cpp{mbind} stands for ``monadic bind''.}:as follows:
 
 \begin{lstlisting}
 expected<exception_ptr,int> f(int i, int j, int k)
 {
   return safe_divide(i, k).mbind([=](int q1) {
-      return safe_divide(j,k).mbind([=](int q2) {
+      return safe_divide(j,k).fmap([=](int q2) {
         return q1+q2;
       });
     });
@@ -619,13 +619,13 @@ Additionally, within the affordable limits, we propose the view that \cpp{expect
 \begin{lstlisting}
 expected<string, int> ei = 0;
 expected<string, int> ej = 1;
-expected<string, int> ek = make_unexpected(string("fail"));
+expected<string, int> ek = make_unexpected(string());
 
 ei = 1;
-ej = make_unexpected(string("fail"));;
+ej = make_unexpected(E());;
 ek = 0;
 
-ei = make_unexpected(string("fail"));;
+ei = make_unexpected(E());;
 ej = 0;
 ek = 1;
 \end{lstlisting}
@@ -897,7 +897,7 @@ This function can be implemented easily using the bool conversion and the derefe
     else throw bad_expected_access(e.error());
   }
   template <class E, class T>
-  contexpr T & value(expected<E,T> & e)
+  contexpr T & value(expected<E,T>& e)
   {
     if(e) return *e;
     else throw bad_expected_access(e.error());
@@ -909,7 +909,7 @@ This function can be implemented easily using the bool conversion and the derefe
     else rethrow_exception(e.error());
   }
   template <class T>
-  contexpr T & value(expected<exception_ptr,T> & e)
+  contexpr T & value(expected<exception_ptr,T>& e)
   {
     if(e) return *e;
     else rethrow_exception(e.error());
@@ -982,7 +982,7 @@ However, the function is provided for symmetry purpose. Implicit conversion from
 \subsubsection{Function \cpp{has_exception}}
 %%%%%%%%%%%%%%%%%%%%%%%%
 
-\cite{AlexandrescuExpected} Expected class has a \cpp{hasException<E>} function that checks if the expected object has a stored exception that derived from E. This function has a sense only when the error parameter is a exception type erased as \cpp{std::exception_ptr} that contains any exception. This function is useful when the user don't needs to get more information that the type of the stored exception.
+\cite{AlexandrescuExpected} Expected class has a \cpp{hasException<E>} function that checks if the expected object has a stored exception that derived from \cpp{E}. This function has a sense only when the error parameter is a exception type erased as \cpp{std::exception_ptr} that contains any exception. This function is useful when the user don't needs to get more information than the type of the stored exception.
 
 \begin{lstlisting}
 expected<exception_ptr,int> getIntOrZero(istream_range& r) {
@@ -1104,7 +1104,6 @@ Together with function \cpp{value}, \cpp{value_or} makes a set of similarly call
 %%%%%%%%%%%%%%%%%%
 
 As \cpp{optional}, one of the design goals of \cpp{expected} is that objects of type \cpp{expected<E,T>} should be valid elements in STL containers and usable with STL algorithms (at least if objects of type \cpp{T} and \cpp{E} are). Equality comparison is essential for \cpp{expected<E,T>} to model concept \cpp{Regular}. C++ does not have concepts, but being regular is still essential for the type to be effectively used with STL. Ordering is essential if we want to store expected values in ordered associative containers. A number of ways of including the unexpected state in comparisons have been suggested. The ones proposed, have been crafted such that the axioms of equivalence and strict weak ordering are preserved: unexpected values stored in \cpp{expected<E,T>} are simply treated as additional values that are always different from \cpp{T}; these values are always compared as less than any value of \cpp{T} when stored in an expected object. 
-
    
 The main issue is how to compare the unexpected values between them.  \cpp{operator==()} is defined for \cpp{exception_ptr}, using shallow semantics but there is no order between two \cpp{exception_ptr}.
 
@@ -1113,7 +1112,7 @@ template <class T, class E>
 constexpr bool operator<(const expected<E,T>& x, const expected<E,T>& y)
 {
   return (x)
-       ? (y) ? *x < *y : true
+       ? (y) ? *x < *y : false
        : (y) ? true : ?<?;
 }
 
@@ -1126,9 +1125,11 @@ constexpr bool operator==(const expected<E,T>& x, const expected<E,T>& y)
 }
 \end{lstlisting}
 
-If we follow the \cpp{optional<T>} semantics, two unexpected values should always be equal and do not compare. That is, \cpp{?<?} should be substituted by \cpp{false} and \cpp{?==?} by \cpp{true}. But considering all the unexpected value equals seems counterintuitive.
+If we follow the \cpp{optional<T>} semantics, two unexpected values should always be equal and do not compare. That is, \cpp{?<?} should be substituted by \cpp{false} and \cpp{?==?} by \cpp{true}. However considering all the unexpected value equals seems counterintuitive.
 
-The alternative consists in forwarding the request to the respective  \cpp{unexpected_type<E>} relational operators.That is, \cpp{?<?} should be substituted by \cpp{x.get_unexpected() < y.get_unexpected()} and \cpp{?==?} by \cpp{x.get_unexpected() == y.get_unexpected()}. But how to define the relational operators for \cpp{unexpected_type<E>}? We can forward the request to the respective \cpp{E} relational operators when \cpp{E} defines these operators and follows the \cpp{optional<T>} semantics otherwise. 
+The alternative consists in forwarding the request to the respective  \cpp{unexpected_type<E>} relational operators. That is, \cpp{?<?} should be substituted by \cpp{x.get_unexpected() < y.get_unexpected()} and \cpp{?==?} by \cpp{x.get_unexpected() == y.get_unexpected()}. 
+
+But how to define the relational operators for \cpp{unexpected_type<E>}? We can forward the request to the respective \cpp{E} relational operators when \cpp{E} defines these operators and follows the \cpp{optional<T>} semantics otherwise. 
 
 The case of \cpp{unexpected_type<std::exception_ptr>} could follow the \cpp{optional<T>} semantics as the shallow comparison is not very useful.
 
@@ -1259,7 +1260,7 @@ In order to make the tag uniform an additional 'expect' constructor could be pro
 
 The \cpp{expected<std::exception_ptr,T>} specialization introduces some operations as \cpp{has_exception} and \cpp{catch_exception}. Should we name the classes differently? For example, \cpp{exception_or<T>} and \cpp{error_or<E,T>}.
 
-\subsubsection{Requirements on \cpp{T} and \cpp{E}}
+\subsubsection{Requirements on \cpp{T} and \cpp{E}}
 %%%%%%%%%%%%%%%%%%
 
 Class template \cpp{expected} imposes little requirements on \cpp{T} and \cpp{E}: they have to be  complete object type satisfying the requirements of \cpp{Destructible}. It is the particular operations on \cpp{expected<E,T>} that impose requirements on \cpp{T} and \cpp{E}: \cpp{expected<E,T>}'s move constructor requires that \cpp{T} and \cpp{E} are \cpp{MoveConstructible}, \cpp{expected<E,T>}'s copy constructor requires that \cpp{T} and \cpp{E} are \cpp{CopyConstructible}, and so on. This is because \cpp{expected<E,T>} is a wrapper for \cpp{T} or \cpp{E}: it should resemble \cpp{T} as much as possible. If \cpp{T} is \cpp{EqualityComparable} then (and only then) we expect \cpp{expected<E,T>} to be \cpp{EqualityComparable}. 
