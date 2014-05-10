@@ -1,0 +1,871 @@
+\documentclass[xcolor=dvipsnames]{beamer}
+
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{url}
+\usepackage{lmodern}
+\usepackage{listings}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{textcomp} 
+\usepackage{hyperref}
+\usepackage{subcaption}
+\usepackage[T1]{fontenc}
+
+\usepackage{color}
+ 
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+ 
+\lstset{
+  language=c++,                % the language of the code
+  basicstyle=\footnotesize,       % the size of the fonts that are used for the code
+  numbers=left,                   % where to put the line-numbers
+  numberstyle=\tiny\color{gray},  % the style that is used for the line-numbers
+  stepnumber=1,                   % the step between two line-numbers. If it's 1, each line 
+                                  % will be numbered
+  numbersep=5pt,                  % how far the line-numbers are from the code
+  backgroundcolor=\color{white},      % choose the background color. You must add \usepackage{color}
+  showtabs=false,                 % show tabs within strings adding particular underscores
+  frame=single,                   % adds a frame around the code
+  rulecolor=\color{black},        % if not set, the frame-color may be changed on line-breaks within not-black text (e.g. comments (green here))
+  tabsize=2,                      % sets default tabsize to 2 spaces
+  captionpos=b,                   % sets the caption-position to bottom
+  breaklines=true,                % sets automatic line breaking
+  breakatwhitespace=false,        % sets if automatic breaks should only happen at whitespace
+  title=\lstname,                   % show the filename of files included with \lstinputlisting;
+                                  % also try caption instead of title
+  keywordstyle=\color{blue},          % keyword style
+  commentstyle=\color{dkgreen},       % comment style
+  stringstyle=\color{mauve},         % string literal style
+  morekeywords={expect, await, constexpr, explicit}
+}
+
+\newcommand{\cpp}[1]{\lstinline{#1}}
+
+\setbeamertemplate{footline}{\hspace*{.5cm}\scriptsize{\insertauthor\hspace*{50pt} \hfill\insertframenumber\hspace*{.5cm}}}
+
+\setbeamertemplate{section in toc}{%
+\textcolor{MidnightBlue}{$\blacktriangleright$ \inserttocsection}
+}
+
+\usecolortheme{seahorse}
+\usecolortheme{rose}
+\useoutertheme{infolines}
+
+\usecolortheme[named=SkyBlue]{structure}
+\setbeamercolor{block title}{fg=MidnightBlue}
+
+\AtBeginSection[]
+{
+  \begin{frame}<beamer>{Content}
+    \tableofcontents[currentsection,hideothersubsections]
+  \end{frame}
+} 
+
+\title{\textsc{Monads}: Alternative designs }
+\subtitle{C++Now 2014}
+\author[\textsc{Botet},\textsc{Talbot}]{Vicente \textsc{Botet Escriba}, Pierre \textsc{Talbot} \texttt{vicente.botet@wanadoo.fr/ptalbot@hyc.io}}
+\institute[Alcatel-Lucent,UMPC]{Alcatel-Lucent International-Lannion/University of Pierre et Marie Curie-Paris (France)}
+\date[]{2014, May 16}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+%%%%%%%%%%
+
+\subsection{About us}
+%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}
+\frametitle{About Pierre Talbot}
+
+\begin{itemize}
+\item Belgian (French side).
+\item Still a student, at the University Pierre et Marie Curie in Paris.
+\item Interest in software engineering, language design and concurrency.
+\end{itemize}
+
+\begin{block}{Open-source involvement}
+\begin{itemize}
+\item \textbf{Boost C++ library} Working on Boost.Check and Boost.Expected
+\item \textbf{Wesnoth} The add-on server (UMCD).
+\end{itemize}
+\end{block}
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}
+\frametitle{About Vicente Botet Escriba}
+
+\begin{figure}[p]
+  \centering
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[scale=0.3]{images/vicente_botet.png}
+  \end{subfigure}
+  \qquad \qquad \quad
+  \begin{subfigure}[b]{0.3\textwidth}
+    \includegraphics[scale=0.3]{images/alu.jpg}
+  \end{subfigure}
+\end{figure}
+
+\begin{itemize}
+\item Spanish.
+\item Work for Alcatel-Lucent International in Lannion - France.
+\item Interest in software engineering, language design, concurrency and STM.
+\end{itemize}
+
+\begin{block}{Open-source involvement}
+\begin{itemize}
+\item \textbf{Boost C++ library} Co-author and maintainer of Boost.Ratio, Boost.Chrono, Boost.Thread and some utilities in Boost.Utility.
+\item \textbf{Toward Boost C++ library} author of a lot of unfinished prototypes.
+\end{itemize}
+\end{block}
+\end{frame}
+
+\subsection{About Boost.Monads}
+%%%%%%%%%%%%
+\begin{frame}
+\frametitle{About Boost.Monads}
+
+\begin{itemize}
+\item After seen that \cpp{expected<E,T>}, \cpp{optional<T>} and \cpp{future<T>} all could share the same Monad interface.
+\item we are looking for this common interface.
+\end{itemize}
+
+\begin{itemize}
+\item Git repository : https://github.com/ptal/Boost.Expected
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Motivation}
+
+Problem:
+
+\begin{itemize}
+  \item We want to define some algorithms that work for \cpp{expected<E,T>}, \cpp{optional<T>} and \cpp{future<T>} between others.
+  \item While these share a common underlying semantic, the interfaces are different.
+  \item We need to define a common interface. 
+\end{itemize}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Concepts design}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Model to Concept Mapping}
+
+Should the mapping be automatic, that is, have a default mapping that is applied implicitly if the type conforms to some syntactical requirements? 
+
+\begin{itemize}
+  \item As concepts are more than syntax the explicit mapping seems mandatory. 
+  \item However this will be cumbersome, and the C++ standard library is based on syntax requirements.
+\end{itemize}
+
+Could several types share the same mapping?
+
+\begin{itemize}
+  \item Several types could already be a model of another Concept that can be used to implement the mapping. 
+\end{itemize}
+
+Could several mappings be applied to the same type?
+
+\begin{itemize}
+  \item A type can be seen in several ways as a model of given concept. 
+\end{itemize}
+
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Alternative designs}
+
+\begin{itemize}
+  \item Direct: the model must provide the specific operations to conform to the Concept, E.g. the expression \cpp{*e} is well formed.
+  \item Indirect: The concept is defined in terms of non-member functions. The developer of the model defines these non member functions for the specific model. E.g. the Concept requires that expression \cpp{deref(e)} is well formed and the Model mapping states how this operation is implemented using the Model.
+  \item Mapper: All the features are mapped from the concept interface to the model interface. 
+\end{itemize}
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Advantages/Liabilities}
+
+\begin{itemize}
+  \item The direct alternative would need to change the interface of the Model to conform to the Concept, or to add a thin wrapper that adapts the interface and force the user to use the adaptor.
+  \item The indirect and mapper alternatives are more open but both introduce non-member functions. 
+  \item The indirect approach could incur on violations of the ODR.  
+  \item In the mapper approach all the functions would need a mapper as template parameter as if the function is executed under this mapper.
+  \item Only the mapper approach allows to have multiple mappings of a model to a concept.  
+  
+\end{itemize}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Concept usage comparison}
+
+\begin{lstlisting}
+template < class PV> // Direct
+constexpr bool equal( const PV& x, const PV& y ) 
+{
+  return bool(x) != bool(y) ? false 
+    : ( bool(x) ? *x == *y : true );
+}
+template <class PV>  // Indirect
+constexpr bool equal( const PV& x, const PV& y ) 
+{
+  return has_value(x) != has_value(y) ? false 
+    : ( has_value(x) ? deref(x) == deref<M>(y) : true );
+}
+template <class M, class PV> // Mapper
+constexpr bool equal( const PV& x, const PV& y ) 
+{
+  return has_value<M>(x) != has_value<M>(y) ? false 
+   : ( has_value<M>(x) ? deref<M>(x) == deref<M>(y) : true );
+}
+\end{lstlisting}
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Monadic Concepts}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Rebindable}
+%%%%%%%%%%%%
+
+\begin{frame}[fragile]
+\frametitle{Rebindable features}
+
+Rebindable is a basic concept that provides a way to
+
+\begin{itemize}
+  \item \cpp{value_type<M>} : obtain the type of the underlying value, 
+  \item \cpp{type_constructor<M>} : obtain the type constructor. 
+  \item \cpp{rebind<M,T>} : build another type substituting the underlying value type. 
+\end{itemize}
+
+satisfying 
+
+\begin{lstlisting}
+is_same<apply<type_constructor<M>, value_type<M>>, M>::value
+is_same<type_constructor<apply<TC, U>>, TC>::value
+is_same<rebind<M, value_type<M>>, M>::value
+is_same<rebind<M, U>, apply<type_constructor<M>,U>>::value
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Rebindable features}
+
+Where
+
+\begin{lstlisting}
+template<class F, class... Args>
+using apply = typename F::template type<Args...>;
+\end{lstlisting}
+
+Examples:
+\begin{itemize}
+  \item pointers:  \cpp{T*}, 
+  \item smart pointers: \cpp{shared_ptr<T>}, 
+  \item containers, \cpp{vector<T>},  \cpp{array<T,N>},  \cpp{T[N]} 
+  \item wrappers: \cpp{optional<T>}, \cpp{expected<E, T>}, \cpp{future<T>},
+  \item other: \cpp{allocator<T>}   
+\end{itemize}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{PossiblyValued}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{PossiblyValued features}
+
+PossiblyValued is a refinement of a Rebindable  concept that allows to
+
+\begin{itemize}
+  \item \cpp{has_value(m)}: check if a value is present.
+  \item \cpp{deref(m)}: obtain a reference to the value. (defined only if \cpp{has_value}).
+  \item \cpp{value(m)}: get a reference to the stored value or throw an exception.
+  
+  \item \cpp{error_type<M>}: obtain the associated error type.
+  \item \cpp{error(m)}: get a reference to the stored error (defined only if \cpp{has_value} is false).
+  
+  \item \cpp{errored_type<M>}: obtain the associated errored type, which is implicitly convertible to the model.
+  \item \cpp{make_errored(m)}: get a value storing the stored error that is convertible to the model. 
+ 
+\end{itemize}
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{PossiblyValued algorithms}
+
+\begin{lstlisting}
+template <class PV> 
+// requires PossiblyValued<PV> 
+// && EqualityComparable<value_type<PV>>
+constexpr bool equal( const PV& x, const PV& y ) {
+  return has_value<M>(x) != has_value<M>(y) ? false 
+       : ( has_value<M>(x) ? deref<M>(x) == deref<M>(y) : true );
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+template <class PV, class U> 
+// requires PossiblyValued<PV> 
+// && Convertible<value_type<PV>,U>
+constexpr value_type<PV> value_or( const PV& x, U&& y ) {
+  return has_value<M>(x) ? deref<M>(x) : value_type<M,PV>(y); 
+}
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Functor}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{C++ 'Functor'}
+
+\cpp{Functor} is a refinement of Rebindable for type wrappers that can be mapped over.  It provides a
+
+\begin{itemize}
+  \item \cpp{fmap(f,m)}: traverse a functor applying a function.
+\end{itemize}
+        
+satisfying
+
+\begin{lstlisting}
+bind(fmap,id,_1)  ==  bind(id,_1)
+bind(fmap, compose(f, g), _1)  ==  
+        compose(bind(fmap, f,_1), bind(fmap, g, _1)
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{Functor}: Overloads of \cpp{fmap}}
+
+\begin{lstlisting}
+  template <class F, class M>
+  auto fmap(F&& f, M&& m)
+       -> decltype( m.fmap(forward<F>(f)) )   {
+    return m.fmap(forward<F>(f));
+  }
+  // overload for optional<T>
+  template <class F, class T>
+  auto fmap(F&& f, optional<T>&& m) 
+       -> decltype(make_optional(f(*m)))    {
+    if (m) return make_optional(f(*m));
+    else return nullopt;
+  }
+\end{lstlisting}
+
+\begin{lstlisting}
+optional<int> f1;
+auto f2 = fmap(fct, f1); 
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{Functor}: Chain syntax for \cpp{fmap}}
+
+\begin{lstlisting}
+// very nice chain syntax. 
+auto f2 = f1.fmap(fct1).fmap(fct2); 
+
+// ugly functional syntax
+auto f2 = fmap(fct2, fmap(fct1, f1));  
+
+// nice chain syntax. 
+optional<int> f2 = as_functor(f1).fmap(fct1).fmap(fct2); 
+auto f2 = as_functor(f1).fmap(fct1).fmap(fct2).get();
+
+// nice operator syntax.  
+optional<int> f2 = as_functor(f1) >> fct1 >> fct2;  
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{C++ Functor - Specialization for PossiblyValued}
+       
+Specialization for models of \cpp{PossiblyValued}       
+
+\begin{lstlisting}
+template <class F, class M>
+// requires PossiblyValued<M> 
+// && Invokable<F, value_type<M>>
+rebind<M, result_of_t<F(value_type<M>)> fmap(F&& f, M&& m) {
+  return has_value( forward<M>(m))
+  ? forward<F>(f)( deref( forward<M>(m) ) )
+  : make_errored(forward<M>(m) ) );
+}
+\end{lstlisting}
+         
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Monad}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Monad}
+
+\cpp{Monad} is a refinement of \cpp{Functor} concept  providing a way to:
+
+\begin{itemize}
+  \item \cpp{make<M>(v)}: build a monad instance from the underlying value type.
+  \item \cpp{mbind(m, f)} : binds a function that will be called only if the action associated to the Monad succeeds.
+  \item \cpp{mdo(m1, m2)} : sequentially compose two actions, discarding any value produced by the first.
+\end{itemize}
+
+satisfying
+
+\begin{lstlisting}
+mbind(make<M>(x), f)  ==  f(x)
+mbind(m, [](auto x) { return make<M>(x);} )  ==  m
+mbind(m, [](auto x) { return mbind(f(x), g); }  ==  
+           mbind(mbind(m, f), g)
+
+fmap(f, m)  ==  
+  mbind(m, compose([](auto x) { return make<M>(x);}, f))
+\end{lstlisting}
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Non-uniform type factories}
+
+\begin{lstlisting}
+auto e1 = make_expected(2); 
+auto e2 = expected<>::make(2); 
+auto e2 = expected<errc>::make(2);
+
+auto o = make_optional(2); 
+auto f = make_ready_future(2); 
+\end{lstlisting}
+
+\begin{itemize}
+  \item Non-uniform syntax -> no generic algorithms 
+\end{itemize}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Uniform type factories - type constructor}
+
+\begin{itemize}
+  \item Type constructor 
+\end{itemize}
+
+\begin{lstlisting}
+auto e2 = make<expected<>>(2); 
+auto e2 = make<expected<errc>>(2);
+auto o = make<optional<>>(2); 
+auto f = make<future<>>(2); 
+\end{lstlisting}
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{expected<E>} as a type constructor}
+
+\begin{lstlisting}
+auto e = make<expected<errc>>(2); 
+// e has type expected<errc, int>
+auto e = make<expected<>>(2); 
+// e has type expected<exception_ptr, int>
+\end{lstlisting}
+
+\begin{lstlisting}
+template<typename TC, class T>
+constexpr apply<TC,decay_t<T>> make(T&& v)  
+{
+  return apply<TC,decay_t<T>>(std::forward(v));
+}
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Uniform type factories - Lifting }
+
+\begin{itemize}
+  \item Lifting variadic template class to create a type constructor 
+\end{itemize}
+
+\begin{lstlisting}
+template <template <class ...> class F, class... Args>
+struct lift {
+  template<class... Args2> using type = F<Args..., Args2...>;
+};
+\end{lstlisting} 
+
+\begin{lstlisting}
+auto e2 = make<lift<expected, exception_ptr>>(2); 
+auto e2 = make<lift<expected, errc>>(2);
+auto o = make<lift<optional>>(2); 
+auto f = make<lift<future>>(2); 
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{lift<future>} as a type constructor?}
+
+\begin{itemize}
+  \item However, \cpp{future<T>} is not explicitly constructible from \cpp{T}.
+\end{itemize}
+
+\begin{lstlisting}
+auto f = make_ready_future(2); 
+auto f = make<lift<future>>(2); 
+\end{lstlisting}
+
+\begin{itemize}
+  \item Either \cpp{future<T>} is constructible from \cpp{T}.
+  \item Either we add an indirection that maps the model to the concept.
+\end{itemize}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{lift<future>} as a type constructor}
+
+\begin{lstlisting}
+template<class TC, class T>
+apply<TC,T>  make(T&& v)  {
+    TC* ptr=0; 
+    return make(std::forward<T>(v), ptr);
+}
+template<class TC, class T>
+apply<TC,T>  make(T&& v, TC*)  {
+    return apply<TC,T>(std::forward<T>(v));
+}
+template<class T>
+future<T>  make(T&& v, lift<future>*)  {
+    return make_ready_future(std::forward<T>(v));
+}
+\end{lstlisting}
+\begin{lstlisting}
+auto f = make<lift<future>>(2); 
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{future<T>} mapping for \cpp{mbind}}
+
+\begin{lstlisting}
+struct future_m {
+  // ...
+  template <class M, class F>
+  static auto mbind(M&& m, F&& f) {
+    return m.then(if_valued(f))
+  }
+};
+\end{lstlisting}
+
+where \cpp{if_valued} is an adaptor that calls \cpp{f} when the parameter has a value.  
+
+\begin{lstlisting}
+auto f2 = mbind<future_m>(f1, fct); 
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{mbind}  specialization for PossiblyValued}
+       
+\begin{lstlisting}
+template <class M, class F>
+// requires PossiblyValued<M> && Invokable<F, value_type<M>>
+result_of_t<F(value_type<M>)> mbind(M&& m, F&& f) {
+  return has_value( forward<M>(m))
+  ? forward<F>(f)( deref( forward<M>(m) ) )
+  : make_errored( forward<M>(m) ) );
+}
+\end{lstlisting}
+         
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{MonadError}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{MonadError}
+
+A MonadError is a Monad which can store errors of different types.
+
+\begin{itemize}
+  \item \cpp{make_error<M>(e)}: signal an error on a monadic function.
+  \item \cpp{catch_error(m, f)}: possibly recover from previous errors and return to normal execution.
+\end{itemize}
+
+Should satisfy the laws:
+
+\begin{lstlisting}
+  fmap(make_error<M>(e),  f) == make_error<M>(e)
+  mbind(make_error<M>(e),  f) == make_error<M>(e)
+  mdo(make_error<M>(e),  f) == make_error<M>(e)
+  catch_error(make<M>(v),  f) == make<M>(v)
+\end{lstlisting}
+\end{frame}
+
+\subsection{MonadException}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{MonadException}
+
+A MonadException is a MonadError which can store errors of different types.
+
+\begin{itemize}
+  \item \cpp{make_exception<M>(e)}: signal an exception on a monadic function.
+  \item \cpp{has_exception<E>(m)} : check if the stored exception is of the type parameter \cpp{E}.
+  \item \cpp{catch_exception<E>(m, f)}: possibly recover from previous exception and return to normal execution.
+\end{itemize}
+
+Examples
+\begin{itemize}
+  \item \cpp{expected<exception_ptr,T>} 
+  \item \cpp{expected<any,T>} 
+  \item \cpp{expected<variant<E1, ..., En>,T>} 
+  \item \cpp{future<T>} 
+  \item \cpp{shared_future<T>} 
+\end{itemize}
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Open Points, Future Work and Conclusions}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}
+\frametitle{Open Points ...}
+
+\begin{itemize}
+  \item Which design should be proposed?
+\end{itemize}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}
+\frametitle{Future Work ...}
+
+\begin{itemize}
+  \item Define a common visitation interface for \cpp{any}, \cpp{variant<E1, ..., En>}, \cpp{exception_ptr}.
+  \item Define an Error concept and an Exception concept that would make \cpp{expected<Error,T>} more generic.
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}
+\frametitle{Conclusions}
+%%%%%%%%%%%%
+\begin{itemize}
+  \item Monadic functions are scary useful tools, 
+  \item that allows to combine functions that return monads but,
+  \item it would be much easier to use it with a specific language do-expression.
+\end{itemize}
+
+\begin{itemize}
+  \item \cpp{expected<E, T>}, \cpp{future<T>} and \cpp{optional<T>} share a lot of things but have some differences.
+  \item Defining a common interface for the functions that have the same behavior allows us to define generic algorithms on top of these concepts.
+  \item Having a monadic common interface would be one step towards this goal.
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}
+%%%%%%%%%%%%
+\begin{center}
+\Large{Thanks for your attention!}
+\end{center}
+\begin{center}
+\Large{Questions?}
+\end{center}
+\end{frame}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{language-like style  - error propagation}
+C++ language extension: Based on the Haskell do-expression. Something similar to the \cpp{await} expression for futures.  
+
+\begin{lstlisting}
+do_expression ::= do_initialization ':' do_expression_or_make_expression
+do_expression_or_make_expression := 
+    do_expression | make_expression
+do_initialization := type var '<-' expression
+\end{lstlisting}
+
+\begin{itemize}
+  \item Transformation semantics.
+\end{itemize}
+
+\begin{lstlisting}
+[[do_expression]] =
+  expression.mbind([&](type var) {
+    return [[do_expression_or_make_expression]]   });
+    
+\end{lstlisting}
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{i/k + j/k}  - DO-macro}
+
+\begin{lstlisting}
+expected<exception_ptr,int> f2(int i, int j, int k) {
+  return DO (
+    ( s1, safe_divide(i, k) )
+    ( s2, safe_divide(j, k) )
+    s1 + s2 
+  );
+}
+\end{lstlisting}
+
+\end{frame}
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{Functor}: Mapper for \cpp{fmap}}
+
+\begin{lstlisting}
+template <class Mapper, class F, class M>
+auto fmap(F&& f, M&& m)
+    -> decltype(Mapper::fmap(forward<F>(f), forward<M>(m)))
+{
+  return Mapper::fmap(forward<F>(f), forward<M>(m));
+}
+// functor mapper for optional
+struct optional_m {
+  // ...
+  template <class F, class T>
+  static auto fmap(F&& f, optional<T>&& m) 
+       -> decltype(make_optional(f(*m)))    {
+  {
+    if (m) return make_optional(f(*m));
+    else return nullopt;
+  }
+};
+\end{lstlisting}
+
+\begin{lstlisting}
+auto f2 = fmap<optional_m>(fct, f1); 
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{Functor}: Uniform chain syntax for \cpp{fmap}}
+
+\begin{lstlisting}
+// very ugly functional syntax
+auto f2 = fmap<optional_m>(fct2, fmap<mapper>(fct1, f1)); 
+
+// nice chain syntax. 
+optional<int> f2 = 
+    as_functor<optional_m>(f1).fmap(fct1).fmap(fct2); 
+auto f2 = 
+    as_functor<optional_m>(f1).fmap(fct1).fmap(fct2).get();
+
+// nice operator syntax.  
+optional<int> f2 = 
+    as_functor<optional_m>(f1) >> fct1 >> fct2;  
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{future_m} mapper as a type constructor}
+
+\begin{lstlisting}
+template<class Mapper, class T>
+apply<Mapper,T>  make(T&& v )  
+{
+    return Mapper::template make(std::forward<T>(v));
+}
+\end{lstlisting}
+\begin{lstlisting}
+struct future_m {
+  template <class T> using type = future<T>;
+  template <class T> 
+  static future<T>  make(T&& v )  {
+    return make_ready_future(std::forward<T>(v));
+}
+\end{lstlisting}
+\begin{lstlisting}
+auto f = make<future_m>(2); 
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{Monad}: Uniform syntax for \cpp{mbind}}
+
+\begin{lstlisting}
+namespace monad {
+  template <class Mapper, class M, class F>
+  auto mbind(M&& m, F&& f)
+    -> decltype(Mapper::mbind(forward<M>(m), forward<F>(f)))
+  {
+    return Mapper::mbind(forward<M>(m), forward<F>(f));
+ }
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+auto f2 = mbind<mapper>(f1, fct); 
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{catch_error} specialization for PossiblyValued}
+       
+\begin{lstlisting}
+template <class M, class F>
+// requires PossiblyValued<M> 
+// && Invokable<F, error_type<M>>
+M catch_error(M&& m, F&& f) {
+  return ! has_value( forward<M>(m))
+  ? forward<F>(f)( error( forward<M>(m) ) )
+  : move(m);
+}
+\end{lstlisting}
+         
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{MonadException catch\_exception example}
+
+\begin{lstlisting}
+template <class M> apply<M, int> safe_divide(int i, int j)  
+{
+  if (j == 0) return make_exception<M>(DivideByZero());
+  else return make<M>(i / j);
+}
+template <class M> apply<M, int> divide(int i, int j)  
+{
+  return catch_exception<NotDivisible>(
+    safe_divide<M>(i,j), 
+    [](auto& e)  { return make<M>(e.i / e.j);  }
+  );
+}
+//...
+  auto a = divide<expected<>>(1, 0);
+\end{lstlisting}
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+\end{document}
