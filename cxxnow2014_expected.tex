@@ -329,7 +329,7 @@ expected<exception_ptr,int> safe_divide(int i, int j)
 \frametitle{\cpp{i + j/k} expected-style  - getting the value when available}
 
 \begin{itemize}
-  \item When the user knows that there is a value it can use the narrowed contact \cpp{operator*()}.
+  \item When the user knows that there is a value it can use the narrowed contract \cpp{operator*()}.
 \end{itemize}
 
 \begin{lstlisting}
@@ -354,7 +354,7 @@ expected<exception_ptr,int> f1(int i, int j, int k)
 }
 \end{lstlisting}
 
-The \cpp{fmap} members calls the provided function if expected contains a value and wrap it, otherwise it forwards the error to the callee. 
+\cpp{fmap}  calls the provided function if expected contains a value and wraps the result, otherwise it forwards the error to the callee. 
 
 Alternative using an existing functor.
 
@@ -475,7 +475,12 @@ expected<exception_ptr,int> f(int i, int j, int k) {
 }
 \end{lstlisting}
 
-The \cpp{mbind} member calls the provided function if expected contains a value, otherwise it forwards the error to the callee. 
+\cpp{mbind} calls the provided function if expected contains a value, otherwise it forwards the error to the callee. 
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{i/k + j/k}  - scale}
 
 \begin{lstlisting}
 auto add = [](int s1, int s2){ return s1+s2; };
@@ -483,14 +488,15 @@ expected<exception_ptr,int> f(int i, int j, int k){
   return fmap(add, safe_divide(i, k), safe_divide(j, k));
 }
 \end{lstlisting}
-The \cpp{fmap} non-member calls the provided function if all the expected contains a value an wrap it, otherwise it forwards the error to the callee. 
+
+The \cpp{fmap} non-member function calls the provided function if all the expected contains a value and wraps the result, otherwise it forwards the first error to the callee. 
 
 \end{frame}
 \subsection{do-expression}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]
 \frametitle{language-like style  - error propagation}
-C++ language extension: Based on the Haskell do-expression. Something similar to the \cpp{await} expression for futures.  
+Possible C++ language extension: Based on the Haskell do-expression. Something similar to the proposed \cpp{await} expression for futures.  
 
 \begin{lstlisting}
 expected<exception_ptr,int> f2(int i, int j, int k) {
@@ -507,7 +513,7 @@ transformed in
 expected<exception_ptr,int> f2(int i, int j, int k) {
   return mbind(safe_divide(i, k),[&](auto s1) {
     return mbind(safe_divide(j, k),[&](auto s2) {
-      return make<expected<exception_ptr>>(s1 + s2);
+      return s1 + s2;
     });
   }); 
 }
@@ -534,10 +540,10 @@ expected<exception_ptr,int> f2(int i, int j, int k) {
 
 \begin{lstlisting}
 #define EXPECT(V, EXPR) \
-auto BOOST_JOIN(expected,V) = EXPR; \
-if (!  BOOST_JOIN(expected,V)) 
-  return make_unexpected(BOOST_JOIN(expected,V).error()); \
-auto V =*BOOST_JOIN(expected,V)
+auto BOOST_JOIN(_expected_,V) = EXPR; \
+if (!  BOOST_JOIN(_expected_,V)) 
+  return make_unexpected(BOOST_JOIN(_expected_,V).error()); \
+auto V =*BOOST_JOIN(_expected_,V)
 \end{lstlisting}
 
 \begin{lstlisting}
@@ -623,26 +629,6 @@ public:
 \end{frame}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]
-\frametitle{class unexpected\_type<std::exception\_ptr> specialization}
-
-\begin{lstlisting}
-template <>
-class unexpected_type<std::exception_ptr> {
-    E error_;
-public:
-    unexpected_type() = delete;
-    explicit unexpected_type(std::exception_ptr e) 
-        :  error_(e) {}
-    template <class E>
-    explicit unexpected_type(E e) 
-         : error_(std::make_exception_ptr(e)) {}     
-    std::exception_ptr value() const { return error_; }                              
-}; 
-\end{lstlisting}
-
-\end{frame}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]
 \frametitle{unexpected factories}
 
 \begin{lstlisting}
@@ -659,7 +645,7 @@ unexpected_type<>
 template <class T, class E>
 constexpr 
 unexpected_type<E> make_unexpected(expected<E, T> v)  {
-    return unexpected_type<E>(error());
+    return unexpected_type<E>(v.error());
 }
 
 \end{lstlisting}
@@ -667,49 +653,11 @@ unexpected_type<E> make_unexpected(expected<E, T> v)  {
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Expected Type}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\subsubsection{Constructors}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]
-\frametitle{Default constructor}
-While \cpp{expected<exception_ptr, T>} is default constructible, there is no exception stored in.
-
-Alternatives: 
-
-\begin{itemize}
-\item value() is undefined behavior if there is no exception stored or 
-\item it throws a specific exception if there is no exception stored.
-\end{itemize}
-
-\end{frame}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsubsection{Conversions}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]
-\frametitle{\cpp{expected<E, T>} conversions from/to \cpp{T}}
-
-\begin{itemize}
-\item \cpp{expected<E, T>} is implicitly convertible from \cpp{T} .
-\item The opposite is not true. Needs explicit function \cpp{value()}.
-\end{itemize}
-
-\begin{lstlisting}
-template <class E, class T>
-class expected {
-  // ...
-  constexpr expected(T&& v);
-  expected&  operator=(T&& v);
-  
-  constexpr T const& value() const&;
-  constexpr T& value() &;
-  constexpr T&& value() &&;
-  
-};
-\end{lstlisting}
-
-\end{frame}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]
-\frametitle{\cpp{expected<E, T>} conversions from/to\cpp{E} and \cpp{unexpected_type<E>}}
+\frametitle{\cpp{expected<E, T>} conversions from/to \cpp{E} and \cpp{unexpected_type<E>}}
 
 \begin{itemize}
 \item \cpp{expected<E, T>} is not convertible from \cpp{E} .
@@ -746,6 +694,8 @@ class expected {
 template <class T>
 class expected<exception_ptr, T> {
   // ...
+  constexpr expected(unexpected_type<exception_ptr>&& e);
+  expected&  operator=(unexpected_type<exception_ptr>&& e);
   template <class E>
   constexpr expected(unexpected_type<E>&& e);
   template <class E>
@@ -754,6 +704,46 @@ class expected<exception_ptr, T> {
   // ...  
 };
 \end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{expected<E, T>} conversions from/to \cpp{T}}
+
+\begin{itemize}
+\item \cpp{expected<E, T>} is implicitly convertible from \cpp{T} .
+\item The opposite is not true. Needs explicit function \cpp{value()}.
+\end{itemize}
+
+\begin{lstlisting}
+template <class E, class T>
+class expected {
+  // ...
+  constexpr expected(T const& v);
+  constexpr expected(T&& v);
+  expected&  operator=(T&& v);
+  
+  constexpr T const& value() const&;
+  constexpr T& value() &;
+  constexpr T&& value() &&;
+  
+};
+\end{lstlisting}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection{Constructors}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Default constructor}
+While \cpp{expected<exception_ptr, T>} is default constructible, there is no exception stored in.
+
+Alternatives: 
+
+\begin{itemize}
+\item value() is undefined behavior if there is no exception stored or 
+\item it throws a specific exception if there is no exception stored.
+\end{itemize}
 
 \end{frame}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -783,7 +773,36 @@ class expected {
 \subsubsection{Monadic functions}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]
-\frametitle{\cpp{fmap}}
+\frametitle{Monadic functions}
+
+
+\begin{tabular}{|c|c|c|c|c|}
+\hline
+                    & Object & From & To & Result  \\
+\hline
+\textbf{fmap} & \cpp{M<E,T>} & \cpp{T} & \cpp{U} & \cpp{M<E,U>} \\
+\hline
+\textbf{fmap} & \cpp{M<E,T>} & \cpp{T} & \cpp{M<E,U>} & \cpp{M<E,M<E,U>>} \\
+\hline
+\textbf{mbind} & \cpp{M<E,T>} & \cpp{T} & \cpp{U} & \cpp{M<E,U>} \\
+\hline
+\textbf{mbind} & \cpp{M<E,T>} & \cpp{T} & \cpp{M<E,U>} & \cpp{M<E,U>} \\
+\hline
+\textbf{catch\_error} & \cpp{M<E,T>} & \cpp{E} & \cpp{T} & \cpp{M<E,T>} \\
+\hline
+\textbf{catch\_error} & \cpp{M<E,T>} & \cpp{E} & \cpp{M<E,T>} & \cpp{M<E,T>} \\
+\hline
+\textbf{then} & \cpp{M<E,T>} & \cpp{M<E,T>} & \cpp{U} & \cpp{M<E,U>} \\
+\hline
+\textbf{then} & \cpp{M<E,T>} & \cpp{M<E,T>} & \cpp{M<E,U>} & \cpp{M<E,U>} \\
+\hline
+\end{tabular}
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{\cpp{fmap} member}
 
 \begin{lstlisting}
   template <typename F>
@@ -801,7 +820,7 @@ class expected {
 \end{frame}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]
-\frametitle{\cpp{mbind}}
+\frametitle{\cpp{mbind} member}
 
 \begin{lstlisting}
   template <typename F>
@@ -819,7 +838,7 @@ class expected {
 \end{frame}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]
-\frametitle{\cpp{catch_error}}
+\frametitle{\cpp{catch_error} member}
 
 \begin{lstlisting}
 template <typename F>
@@ -958,16 +977,21 @@ public:
 \hline
 \textbf{relational operators} & if \cpp{E} and \cpp{T} & no \\
 \hline
+\textbf{hash} & if \cpp{E} and \cpp{T} & no \\
+\hline
 \textbf{has\_exception} & no & yes \\
 \hline
 \textbf{catch\_exception} & no & yes \\
 \hline
 \end{tabular}
+
+\begin{itemize}
+  \item Should \cpp{expected<E,T>} and \cpp{expected<exception_ptr,T>} be represented by two different classes?
+\end{itemize}
+
 \end{frame}
-
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Related types}
-%%%%%%%%%%%%
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]
 \frametitle{\cpp{boost::variant<unexpected_type<E>,T>} Comparison}
@@ -993,7 +1017,7 @@ public:
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]
-\frametitle{\cpp{std::future<T>} Comparison}
+\frametitle{\cpp{std::future<T>} and \cpp{expected<exception_ptr,T>} Comparison}
 
 \begin{tabular}{|c|c|c|}
 \hline
@@ -1004,6 +1028,8 @@ public:
 \textbf{relational operators} & no & depends \\
 \hline
 \textbf{factories} & \cpp{make_ready_future} & \cpp{make_expected}  \\
+\hline
+\textbf{factories} & no & \cpp{make_unexpected}  \\
 \hline
 \textbf{emplace} & no & yes \\
 \hline
@@ -1024,6 +1050,23 @@ public:
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]
+\frametitle{expected/future differences}
+
+\begin{itemize}
+\item Should we add a \cpp{make<future<>>} as \cpp{make<expected<E>>}?
+\item Should we make \cpp{future<T>} be implicitly constructible from \cpp{unexpected_type<exception_ptr>>}?
+\item Should we add emplace functions for \cpp{future<T>}?
+\item Should we add nested \cpp{value_type} to \cpp{future<T>}?
+\item Should we add  \cpp{valid()} and \cpp{ready()} functions to \cpp{expected<E,T>} that return always true?
+\item Should we add  \cpp{operator bool} to \cpp{future<T>}?
+\item Should we add  \cpp{fmap()}/\cpp{mbind()}/\cpp{catch_error()}  functions to \cpp{future<T>}?
+\item Should we add  \cpp{value()} to \cpp{future<T>}?
+\item Should we add  \cpp{error()} to \cpp{future<T>}?
+\end{itemize}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
 \frametitle{Conversions from/to ready std::experimental::future<T> }
 
 \begin{lstlisting}
@@ -1040,7 +1083,8 @@ expected<exception_ptr,T> make_expected(future<T>&& f) {
 
 \begin{lstlisting}
 template <class T>
-std::future<T> make_ready_future(expected<exception_ptr, T>&& e) {
+std::future<T> 
+make_ready_future(expected<exception_ptr, T>&& e) {
   if (e) return make_ready_future(*e);
   else return make_unexpected_future<T>(e.error()); 
 }
@@ -1049,7 +1093,7 @@ std::future<T> make_ready_future(expected<exception_ptr, T>&& e) {
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]
-\frametitle{make\_unexpected\_future }
+\frametitle{\cpp{make_unexpected_future} }
 
 \begin{lstlisting}
 template <class T, class E>
@@ -1065,7 +1109,7 @@ std::future<T> make_unexpected_future(E e)  {
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]
-\frametitle{make\_expected alternative implementation }
+\frametitle{\cpp{make_expected} alternative implementation }
 
 \begin{itemize}
 \item If  \cpp{future<T>} stores the exception on a  \cpp{exception_ptr}, could define this function as a friend function.   
@@ -1093,8 +1137,6 @@ expected<exception_ptr, T> make_expected(future<T>&& f) {
 \end{lstlisting}
 
 \end{frame}
-
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]
 \frametitle{std::experimental::optional<T> Comparison}
@@ -1122,14 +1164,31 @@ expected<exception_ptr, T> make_expected(future<T>&& f) {
 \hline
 \textbf{observers} & \cpp{value}  & \cpp{value} / \cpp{error}   \\
 \hline
+\textbf{unwrap} & no  & yes   \\
+\hline
 \textbf{visitation} & no & \cpp{fmap}/\cpp{mbind}/\cpp{catch_error}  \\
 \hline
 \end{tabular}
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{expected/optional Differences }
+
+\begin{itemize}
+\item Should we add a \cpp{make<optional<>>} as \cpp{make<expected<E>>}?
+\item Should we make \cpp{expected<E,T>} be implicitly constructible from \cpp{E>}?
+\item Should we add nested \cpp{value_type} to \cpp{optional<T>}?
+\item Should we add  \cpp{fmap()}/\cpp{mbind()}/\cpp{catch_error()}  functions to \cpp{optional<T>}?
+\item Should we add  \cpp{error()} to \cpp{optional<T>}?
+\item Should we add  \cpp{unwrap()} to \cpp{optional<T>}?
+\end{itemize}
+
 \end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}[fragile]
 \frametitle{std::experimental::optional<T> Conversions}
+
 \begin{lstlisting}
 template <class T>
 optional<T> make_optional(expected<E, T> v) {
@@ -1149,23 +1208,48 @@ expected<exception_ptr, T> make_expected(optional<T> v) {
 \end{frame}
 
 \section{Open Points, Future Work and Conclusions}
-%%%%%%%%%%%
-
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}
 \frametitle{Open Points ...}
-%%%%%%%%%%%%
 
 \begin{itemize}
   \item Should the \cpp{operator==} collapse all the unexpected values?
   \item Should \cpp{expected<errc,T>} and \cpp{expected<exception_ptr,T>} be represented by two different classes?
   \item Should \cpp{expected<E,T>} throw \cpp{E} instead of \cpp{bad_expected_access}?
+  \item Should \cpp{expected<E,T>} be convertible from \cpp{E} when it is not convertible to \cpp{T}?
+  \item Should  \cpp{fmap()}/\cpp{mbind()}/\cpp{catch_error()} expect that the continuation doesn't throws?
+  \item Should we have operators for  \cpp{fmap()}/\cpp{mbind()}/\cpp{catch_error()} (\cpp{^}/\cpp{&}/\cpp{|})?
+
 \end{itemize}
 
 \end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}[fragile]
+\frametitle{Infix operators}
 
+\begin{lstlisting}
+auto e2 = e1 ^ f1 ^ f2;
+\end{lstlisting}
+
+\begin{lstlisting}
+auto e2 = e1 ^fmap^ f1 ^fmap^ f2;
+\end{lstlisting}
+
+\begin{lstlisting}
+return ( e1 <- f1 : e2 <- f2 : e1+e2 ) | rec;
+\end{lstlisting}
+
+\begin{lstlisting}
+return ( e1 <- f1 : e2 <- f2 : e1+e2 ) ^catch_error^ rec;
+\end{lstlisting}
+
+
+\end{frame}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}
 \frametitle{Future Work ...}
-%%%%%%%%%%%%
 
 \begin{itemize}
   \item Allocator support for expected.
@@ -1174,10 +1258,10 @@ expected<exception_ptr, T> make_expected(optional<T> v) {
 \end{itemize}
 
 \end{frame}
-
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}
 \frametitle{Conclusions}
-%%%%%%%%%%%%
+
 \begin{itemize}
   \item \cpp{expected<E, T>} monadic functions are useful tools, 
   \item that allows to combine functions that return \cpp{expected<E, T>} but,
@@ -1191,9 +1275,8 @@ expected<exception_ptr, T> make_expected(optional<T> v) {
 \end{itemize}
 
 \end{frame}
-
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}
-%%%%%%%%%%%%
 \begin{center}
 \Large{Thanks for your attention!}
 \end{center}
@@ -1203,42 +1286,8 @@ expected<exception_ptr, T> make_expected(optional<T> v) {
 \end{frame}
 
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-
-
-
-
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}[fragile]
-\frametitle{language-like style  - error propagation}
-C++ language extension: Based on the Haskell do-expression. Something similar to the \cpp{await} expression for futures.  
-
-\begin{lstlisting}
-do_expression ::= do_initialization ':' do_expression_or_make_expression
-do_expression_or_make_expression := 
-    do_expression | make_expression
-do_initialization := type var '<-' expression
-\end{lstlisting}
-
-\begin{itemize}
-  \item Transformation semantics.
-\end{itemize}
-
-\begin{lstlisting}
-[[do_expression]] =
-  expression.mbind([&](type var) {
-    return [[do_expression_or_make_expression]]   });
-    
-\end{lstlisting}
-
-\end{frame}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 
 
 \end{document}
