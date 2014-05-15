@@ -64,10 +64,10 @@
   \end{frame}
 } 
 
-\title{\textsc{Expected}: Exception-friendly MonadError}
+\title{\textsc{Expected}: Exception-friendly Error Monad}
 \subtitle{C++Now 2014}
-\author[\textsc{Botet},\textsc{Talbot}]{Vicente \textsc{Botet Escriba}, Pierre \textsc{Talbot} \texttt{vicente.botet@wanadoo.fr/ptalbot@hyc.io}}
-\institute[Alcatel-Lucent,UMPC]{Alcatel-Lucent International-Lannion/University of Pierre et Marie Curie-Paris (France)}
+\author[\textsc{Vicente Botet}]{Vicente \textsc{Botet Escriba} \texttt{vicente.botet@wanadoo.fr}}
+\institute[Alcatel-Lucent]{Alcatel-Lucent International-Lannion}
 \date[]{2014, May 16}
 
 \begin{document}
@@ -76,27 +76,8 @@
 \section{Introduction}
 %%%%%%%%%%
 
-\subsection{About us}
-%%%%%%%%%%%
+\subsection{About me}
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\begin{frame}
-\frametitle{About Pierre Talbot}
-
-\begin{itemize}
-\item Belgian (French side).
-\item Still a student, at the University Pierre et Marie Curie in Paris.
-\item Interest in software engineering, language design and concurrency.
-\end{itemize}
-
-\begin{block}{Open-source involvement}
-\begin{itemize}
-\item \textbf{Boost C++ library} Working on Boost.Check and Boost.Expected
-\item \textbf{Wesnoth} The add-on server (UMCD).
-\end{itemize}
-\end{block}
-\end{frame}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{frame}
 \frametitle{About Vicente Botet Escriba}
 
@@ -131,20 +112,31 @@
 \frametitle{About Boost.Expected}
 
 \begin{itemize}
-\item Based on the original idea of Andrei Alexandrescu (Systematic Error Handling in C++).
-\item Interface based on the new \cpp{std::experimental::optional<T>} type,taking advantage of the new C++11/14 features.
-\item Extended to conform to the MonadError concept.
-\item The project born as a proposal the authors made for GSoC 2013.
+\item Original idea of Andrei Alexandrescu (Systematic Error Handling in C++).
+\item Interface based on the new \cpp{std::experimental::optional<T>} type.
+\item Extended to conform to the error monad concept.
 \item We are currently working on a C++ standard proposal that we expect to be ready for Rapperswil.
 \item Once the interface would be more stable we will propose it for review to Boost.
 \end{itemize}
+\end{frame}
 
+\begin{frame}
+\frametitle{About Boost.Expected}
+
+\begin{itemize}
+\item The project born as a proposal the authors made for GSoC 2013.
+\item Pierre Talbot is the student working on it with me.
+\end{itemize}
+
+\begin{block}{Links}
 \begin{itemize}
 \item Git repository : https://github.com/ptal/Boost.Expected
 \item C++ draft proposal : http://www.hyc.io/boost/expected-proposal.pdf
 \end{itemize}
+\end{block}
 \end{frame}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 \begin{frame}[fragile]
 \frametitle{Overview}
 
