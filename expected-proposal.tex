@@ -101,8 +101,8 @@
 \maketitle
 \begin{textblock*}{9cm}(7cm,-8cm)
 \begin{tabular}{l l}
-\textbf{Document number:} & Dxxxx=xx-xxxx \\
-\textbf{Date:}  & \today \\
+\textbf{Document number:} & N4015 \\
+\textbf{Date:}  & 2014/05/21 \\
 \textbf{Revises:} & None \\
 \textbf{Project:} & JTC1.22.32 Programming \\
  & Language C++ \\
@@ -260,18 +260,18 @@ However \cpp{expected<E,T>} delivers cleaner code when used in a functional styl
 \begin{lstlisting}
 expected<exception_ptr,int> f1(int i, int j, int k)
 {
-  return safe_divide(j, k).fmap([&](int q){
+  return safe_divide(j, k).map([&](int q){
     return i + q;
   });
 }
 \end{lstlisting}
 
-The \cpp{fmap} members calls the continuation provided if expected contains a value, otherwise it forwards the error to the callee. Using lambda function might clutter the code, so here an example using functor:
+The \cpp{map} members calls the continuation provided if expected contains a value, otherwise it forwards the error to the callee. Using lambda function might clutter the code, so here an example using functor:
 
 \begin{lstlisting}
 expected<exception_ptr,int> f1(int i, int j, int k)
 {
-  return safe_divide(j, k).fmap(bind(plus, i, _1));
+  return safe_divide(j, k).map(bind(plus, i, _1));
 }
 \end{lstlisting}
 
@@ -363,31 +363,31 @@ expected<exception_ptr,int> f2(int i, int j, int k)
 }
 \end{lstlisting}
 
-This is nice in the sense that whenever there is an error we get a specific error result. However the ``clean code'' characteristic introduced in section \ref{motiv-scope} is not well-respected as the readability doesn't differ much from the ``C return code''. We can rewrite this using a functional style using the member function \cpp{mbind}\footnote{\cpp{mbind} stands for ``monadic bind''.}:as follows:
+This is nice in the sense that whenever there is an error we get a specific error result. However the ``clean code'' characteristic introduced in section \ref{motiv-scope} is not well-respected as the readability doesn't differ much from the ``C return code''. We can rewrite this using a functional style using the member function \cpp{bind}\footnote{\cpp{bind} stands for ``monadic bind''.}:as follows:
 
 \begin{lstlisting}
 expected<exception_ptr,int> f(int i, int j, int k)
 {
-  return safe_divide(i, k).mbind([=](int q1) {
-      return safe_divide(j,k).fmap([=](int q2) {
+  return safe_divide(i, k).bind([=](int q1) {
+      return safe_divide(j,k).map([=](int q2) {
         return q1+q2;
       });
     });
 }
 \end{lstlisting}
 
-The error-handling code has completely disappeared but the lambda functions are a new source of noise, and this is even more important with $n$ expected variables. A cleaner solution uses the variadic free function \cpp{fmap}\footnote{\cpp{fmap} stands for ``functor map''.}:
+The error-handling code has completely disappeared but the lambda functions are a new source of noise, and this is even more important with $n$ expected variables. A cleaner solution uses the variadic free function \cpp{map}\footnote{\cpp{map} stands for ``functor map''.}:
 
 \begin{lstlisting}
 expected<exception_ptr,int> f(int i, int j, int k)
 {
-  return fmap(plus,
+  return map(plus,
     safe_divide(i, k), 
     safe_divide(j, k));
 }
 \end{lstlisting}
 
-The function \cpp{fmap} returns the first erroneous expected argument or, if they all contain a value, the result of the \cpp{plus} operation.
+The function \cpp{map} returns the first erroneous expected argument or, if they all contain a value, the result of the \cpp{plus} operation.
 
 
 Now let's rewrite this using a possible C++ language extension: adding a DO expression like the Haskell do expression. It is something similar  to the \cpp{await} extension for futures however it is not limited to futures. It could works for any monad.   
@@ -406,7 +406,7 @@ The meaning of \cpp{do-expression}  is given by a transformation \cpp{[[ ]]}
 
 \begin{lstlisting}
 [[do-expression]] =
-  mbind(expression,[&](type var) {
+  bind(expression,[&](type var) {
     return [[do-expression-or-expression]]
   });
 \end{lstlisting}
@@ -429,8 +429,8 @@ resulting in the transformed C++ code
 \begin{lstlisting}
 expected<exception_ptr,int> f2(int i, int j, int k)
 {
-  return mbind(safe_divide(i, k) ,[&r](auto s1) {
-    return mbind(safe_divide(j, k),[&r](auto s2) {
+  return bind(safe_divide(i, k) ,[&r](auto s1) {
+    return bind(safe_divide(j, k),[&r](auto s2) {
       return s1 + s2;
     });
   }); 
@@ -1347,7 +1347,7 @@ The proposed interface for expected values does not contain IO operations: \cpp{
 \subsubsection{When valued/unexpected}
 %%%%%%%%%%
 
-In addition the \cpp{.then()} function that accepts a continuation having the expected object as parameter, the proposal includes two separated functions, one \cpp{.mbind()} that applies when the expected object is valued and accepts a continuation having the underlying \cpp{value_type} as parameter. The other \cpp{.catch_error()} applies when the expected object is not valid and is used to try to recover from the error.  
+In addition the \cpp{.then()} function that accepts a continuation having the expected object as parameter, the proposal includes two separated functions, one \cpp{.bind()} that applies when the expected object is valued and accepts a continuation having the underlying \cpp{value_type} as parameter. The other \cpp{.catch_error()} applies when the expected object is not valid and is used to try to recover from the error.  
 
 \subsubsection{Continuation adaptors}
 %%%%%%%%%%
@@ -1390,7 +1390,7 @@ use( ei.value_or_call([&]{return painfully_compute_default();} );
 This is quite close to the context of use of  \cpp{catch_error}, but the function called has no parameter. As there is an alternative using generic lambdas this proposal doesn't propose neither this function.
 
 \begin{lstlisting}
-ei.catch_error([](auto){ return painfully_compute_default();}).mbind(use);       
+ei.catch_error([](auto){ return painfully_compute_default();}).bind(use);       
 \end{lstlisting}
 
 \subsubsection{When all ready}
@@ -1401,12 +1401,12 @@ ei.catch_error([](auto){ return painfully_compute_default();}).mbind(use);
 \subsubsection{When all valued}
 %%%%%%%%%%
 
-However, there is yet a need to apply a function when all the expected are valued. The free function \cpp{fmap()} takes a variadic continuation and a variadic number of expected parameters. The type and number of the parameters must be compatible with the continuation arguments.
+However, there is yet a need to apply a function when all the expected are valued. The free function \cpp{map()} takes a variadic continuation and a variadic number of expected parameters. The type and number of the parameters must be compatible with the continuation arguments.
 
 \begin{lstlisting}
  expected<exception_ptr,int> sumFirstAndSecond5(istream_range& r)
 {
-  return fmap(plus, getInt(r), getInt(r));
+  return map(plus, getInt(r), getInt(r));
 }
 \end{lstlisting}
 
@@ -1482,7 +1482,7 @@ The table \ref{comp-variant} presents a brief comparison between \cpp{boost::var
 \hline
 \textbf{observers} & boost::get<T> and boost::get<E> & pointer-like / value / error / value_or / value_or_throw \\
 \hline
-\textbf{continuations} & apply_visitor & then/mbind/catch_error  \\
+\textbf{continuations} & apply_visitor & then/bind/catch_error  \\
 \hline
 \end{tabular}
 \egroup
@@ -1564,7 +1564,7 @@ We can combine them as follows
 \begin{lstlisting}
 fut.then([](future<int> f) { 
   return make_ready_future(
-    make_expected(f).mbind([](i){ ... }).catch_error(...));
+    make_expected(f).bind([](i){ ... }).catch_error(...));
   });
 \end{lstlisting}
 
@@ -1575,7 +1575,7 @@ As for the \cpp{future<T>} proposal, \cpp{expected<E,T>} provides also a way to 
 \cpp{future<T>} provides a \cpp{then()} function that accepts a continuation having the \cpp{future<T>} as parameter. The synchronous nature of expected makes it easier to use two functions, one to manage with the case expected has a value and one to try to recover otherwise. This is more in line with the monad interface, as any function having a \cpp{T} as parameter can be used as parameter of the apply function, no need to have a \cpp{expected<E,T>}. This make it easier to reuse functions. 
 
 \begin{itemize}
- \item \cpp{expected<E,T>::mbind()}/\cpp{expected<E,T>::catch_error()} are the counterpart of \cpp{future<T>.then()}
+ \item \cpp{expected<E,T>::bind()}/\cpp{expected<E,T>::catch_error()} are the counterpart of \cpp{future<T>.then()}
  \item \cpp{expected<E,T>::unwrap()} is the counterpart of \cpp{future<T>.unwrap()}
  \item \cpp{expected<E,T>::operator bool()} is the counterpart of \cpp{future<T>.has_value()}
 \end{itemize}
@@ -1615,11 +1615,11 @@ The table \ref{comp-monads} presents a brief comparison between \cpp{optional<T>
 \hline
 \textbf{observers} & pointer-like / value / value_or & pointer-like / value / error / value_or / value_or_throw & get / (get_exception_ptr, see \cite{MoreAsync}) \\
 \hline
-\textbf{visitation} & no & then/mbind/catch_error  & then / (next/recover see \cite{MoreAsync}) \\
+\textbf{visitation} & no & then/bind/catch_error  & then / (next/recover see \cite{MoreAsync}) \\
 \hline
 \textbf{grouping} & n/a & n/a & when_all / when_any \\
 \hline
-\textbf{apply} & no & mbind & no \\
+\textbf{apply} & no & bind & no \\
 \hline
 \end{tabular}
 \egroup
@@ -1627,7 +1627,7 @@ The table \ref{comp-monads} presents a brief comparison between \cpp{optional<T>
 \label{comp-monads}
 \end{table}
 
-\section{Open questions}
+\section{Open points}
 %%%%%%%%%%%%%
 
 \subsection{Allocator support}
@@ -2093,7 +2093,7 @@ An instance of \cpp{expected<E,T>} is said to be unexpected if it contains an ob
     expected<E,T> catch_exception(F&& f);
 
     template <typename F>
-      auto mbind(F&& func) const -> expected<E, decltype(func(val))>;
+      auto bind(F&& func) const -> expected<E, decltype(func(val))>;
     template <typename F>
       expected<E,T> catch_error(F&& f);
     template <typename F>
@@ -2937,10 +2937,10 @@ returns \cpp{unwrap(expected<E, decltype(func(val))>(funct(*this)))},
 \end{wordingTextItem}
 \end{wordingPara}
 
-% mbind factory.
+% bind factory.
 \begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class Ex,class F>
-auto expected<E,T>::mbind(F&& func) const -> unwrap_nested_expected_t<expected<E, decltype(func(val))>>;
+auto expected<E,T>::bind(F&& func) const -> unwrap_nested_expected_t<expected<E, decltype(func(val))>>;
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
@@ -3032,7 +3032,7 @@ otherwise, returns \cpp{*this}.
     expected<E,void> catch_exception(F&& f);
 
     template <typename F>
-      auto mbind(F&& func) const -> expected<E, decltype(func())>;
+      auto bind(F&& func) const -> expected<E, decltype(func())>;
     template <typename F>
       expected<void,E> catch_error(F&& f);
     template <typename F>
