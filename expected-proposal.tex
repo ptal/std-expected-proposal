@@ -136,8 +136,8 @@ Basically, the two main error mechanisms are exceptions and return codes. Before
 
 The first and the third characteristic seem to be quite contradictory and deserve further explanation. The former points out that errors not handled should appear clearly in the code. The latter tells us that the error handling mustn't interfere with the code reading, meaning that it clearly shows the normal execution flow. A comparison between the exception and return codes is given in the table \ref{comp-handling-error}.
 
-
-\begin{table}
+\begin{table}[h!]
+\centering
 \bgroup
 \def\arraystretch{1.5}
 \begin{tabular}{|l|>{\raggedright\arraybackslash}p{5cm}|>{\raggedright\arraybackslash}p{5cm}|}
@@ -158,49 +158,31 @@ The first and the third characteristic seem to be quite contradictory and deserv
 \label{comp-handling-error}
 \end{table}
 
-\subsection{Alexandrescu Expected class}
+\subsection{Expected class}
 %%%%%%%%%%%%%%%%%%%%
 
-We can do the same analysis for the \cpp{Expected<T>} class from Alexandrescu talk \cite{AlexandrescuExpected}:
+We can do the same analysis for the \cpp{Expected<E, T>} class and observe the advantages over the classic error reporting systems.
 
 \begin{itemize}
- \item \textbf{Error visibility} It takes the best of the exception and error code. It's visible because the return type is Expected<T> and if the user ignore the error case, it throws the contained exception.
- \item \textbf{Information} As rich as exception.
- \item \textbf{Clean code} It's up to the programmer to choose handling errors as error code or to throw the contained exception.
+ \item \textbf{Error visibility} It takes the best of the exception and error code. It's visible because the return type is Expected<E, T> and the user cannot ignore the error case if he wants to retrieve the contained value.
+ \item \textbf{Information} Arbitrarily rich.
+ \item \textbf{Clean code} The monadic interface of expected provides a framework delegating the error handling to another layer of code. Note that \cpp{Expected<E, T>} can also act as a bridge between an exception-oriented code and a nothrow world.
  \item \textbf{Non-Intrusive} Use the return channel without monopolizing it.
 \end{itemize}
 
 \noindent
-Other characteristics of \cpp{Expected<T>}:
+It worths mentioning the other characteristics of \cpp{Expected<E, T>}:
 
 \begin{itemize}
  \item Associates errors with computational goals.
- \item Naturally allows multiple exceptions inflight.
- \item Switch between ``error handling'' and ``exception throwing'' styles.
+ \item Naturally allows multiple errors inflight.
  \item Teleportation possible.
  \begin{itemize}
   \item Across thread boundaries.
   \item Across nothrow subsystem boundaries.
   \item Across time: save now, throw later.
  \end{itemize}
- \item Collect, group, combine exceptions.
-\end{itemize}
-
-\noindent
-However \cpp{Expected<T>} class also has some minor limitations:
-\begin{itemize}
- \item The error code must be an exception.
- \item It doesn't provide a better solution to resolve errors. You can throw or use the \cpp{hasException<E>()} function to test errors which is similar to the old switch case statement.
- \item The function \cpp{hasException<E>()} test the type and so cannot distinguish two different errors from the same exception. Exception can contains multiple error case scenarios (think about \cpp{std::invalid_argument}).
-\end{itemize}
-
-\subsection{Differences between the proposed expected class and Alexandrescu Expected class}
-
-The main enhancements or differences of the proposed \cpp{expected<E,T>} respect to \cpp{Expected<T>} are:
-\begin{itemize}
- \item \cpp{expected<E,T>} parameterizes the root cause that prevents its creation, \cpp{expected<E,T>} is either a \cpp{T} or the root cause \cpp{E} that prevents its creation.  \item \cpp{expected<E,T>} is default constructible.
- \item \cpp{expected<E,T>} is implicitly constructible from an \cpp{unexpected_type<E>}.
- \item \cpp{expected<E,T>} is a monad error (see \cite{MONAD_ERROR}).
+ \item Collect, group, combine errors.
 \end{itemize}
 
 \section{Use cases}
