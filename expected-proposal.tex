@@ -1784,9 +1784,7 @@ inline namespace fundamentals_v2 {
    
   // \ref{expected.bad_expected_access}, class bad_expected_access
   class bad_expected_access;
-  
-  // \ref{expected.expected_default_constructed}, class expected_default_constructed
-  class expected_default_constructed;
+ 
   
   // \ref{expected.relational_op}, Expected relational operators
   template <class T, class E>
@@ -1958,11 +1956,13 @@ An instance of \cpp{expected<E,T>} is said to be unexpected if it contains an ob
     expected<E,T> catch_exception(F&& f);
 
     template <typename F>
-      auto bind(F&& func) const -> expected<E, decltype(func(val))>;
+      expected<E, decltype(func(declval<T>()))> map(F&& func) ;
+    template <typename F>
+      'see below' bind(F&& func);
     template <typename F>
       expected<E,T> catch_error(F&& f);
     template <typename F>
-      auto then(F&& func) const -> expected<E, decltype(func(*this))>;
+      'see below' then(F&& func);
   
   private:
     bool has_value;    // exposition only
@@ -2492,7 +2492,11 @@ constexpr T& expected<E,T>::value() &;
 \cpp{val}, \cpp{if bool(*this)}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Throws}
-\cpp{bad_expected_access(err)} if \cpp{!*this}.
+\begin{itemize}
+\item When \cpp{E} is \cpp{std::exception_ptr} as if \cpp{rethrow_exception(error())} if \cpp{!*this} 
+\item Otherwise \cpp{bad_expected_access(err)} if \cpp{!*this}.
+\end{itemize}
+
 \end{wordingTextItem}
 \begin{wordingTextItem}{Remarks}
 The first function shall be a \cpp{constexpr} function.
@@ -2508,7 +2512,10 @@ constexpr T&& expected<E,T>::value() &&;
 \cpp{move(val)}, \cpp{if bool(*this)}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Throws}
-\cpp{bad_expected_access(err)} if \cpp{!*this}.
+\begin{itemize}
+\item When \cpp{E} is \cpp{std::exception_ptr} as if \cpp{rethrow_exception(error())} if \cpp{!*this} 
+\item Otherwise \cpp{bad_expected_access(err)} if \cpp{!*this}.
+\end{itemize}
 \end{wordingTextItem}
 \begin{wordingTextItem}{Remarks}
 The first function shall be a \cpp{constexpr} function.
@@ -2779,7 +2786,7 @@ The function shall not participate in overload resolution unless: \\
 % catch_exception factory.
 \begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class Ex,class F>
-expected<E,T> expected<E,T>::catch_exception(F&& func) const;
+expected<E,T> expected<E,T>::catch_exception(F&& func);
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
@@ -2791,33 +2798,45 @@ otherwise, returns \cpp{*this}.
 \end{wordingTextItem}
 \end{wordingPara}
 
-% then factory.
+% map factory.
 \begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class Ex,class F>
-auto expected<E,T>::then(F&& func) const -> unwrap_nested_expected_t<expected<E, decltype(func(val))>>;
+'see below' expected<E,T>::map(F&& func) 
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
-returns \cpp{unwrap(expected<E, decltype(func(val))>(funct(*this)))}, 
+if \cpp{bool(*this)} returns returns \cpp{expected<E, decltype(func(move(val)))>(func(move(val)))}, 
+otherwise, returns \cpp{get_unexpected()}.
 \end{wordingTextItem}
 \end{wordingPara}
 
 % bind factory.
 \begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class Ex,class F>
-auto expected<E,T>::bind(F&& func) const -> unwrap_nested_expected_t<expected<E, decltype(func(val))>>;
+'see below' expected<E,T>::bind(F&& func) 
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
-if \cpp{bool(*this)} returns \cpp{unwrap(expected<E, decltype(func(val))>(funct(**this)))}, 
+if \cpp{bool(*this)} returns returns \cpp{unwrap(expected<E, decltype(func(move(val)))>(func(move(val))))}, 
 otherwise, returns \cpp{get_unexpected()}.
+\end{wordingTextItem}
+\end{wordingPara}
+
+% then factory.
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
+template <class Ex,class F>
+'see below' expected<E,T>::then(F&& func);
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Returns}
+returns \cpp{unwrap(expected<E, decltype(func(move(*this)))>(func(move(*this))))}, 
 \end{wordingTextItem}
 \end{wordingPara}
 
 % catch_error factory.
 \begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class Ex,class F>
-expected<E,T> expected<E,T>::catch_error(F&& func) const;
+expected<E,T> expected<E,T>::catch_error(F&& func);
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
@@ -2897,11 +2916,13 @@ otherwise, returns \cpp{*this}.
     expected<E,void> catch_exception(F&& f);
 
     template <typename F>
-      auto bind(F&& func) const -> expected<E, decltype(func())>;
+      expected<E, decltype(func())> map(F&& func) ;
+    template <typename F>
+      'see below' bind(F&& func) ;
     template <typename F>
       expected<void,E> catch_error(F&& f);
     template <typename F>
-      auto then(F&& func) const -> expected<E, decltype(func(*this))>;
+      'see below' then(F&& func);
 
   private:
     bool has_value;    // exposition only
@@ -2969,23 +2990,6 @@ The stored error..
 The first function shall be a \cpp{constexpr} function.
 \end{wordingTextItem}
 \end{wordingPara}
-
-\wordingSubSec{Class expected_default_constructed}{expected.expected_default_constructed}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-\begin{lstlisting}
-namespace std {
-  template <class E>
-  class expected_default_constructed : public logic_error {
-  public:
-    explicit expected_default_constructed();
-  };
-}
-\end{lstlisting}
-
-The class \cpp{expected_default_constructed} defines the type of objects thrown as exceptions to report the situation where an attempt is made to access the \cpp{expected<exception_ptr,T>::error()}/\cpp{expected<exception_ptr,T>::get_unexpected()} value of a unexpected expected object that has no exception stored.
-
-\todo{Describe the functions.}
 
 \wordingSubSec{Expected Relational operators}{expected.relational_op}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
