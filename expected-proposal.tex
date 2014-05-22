@@ -192,43 +192,53 @@ It worths mentioning the other characteristics of \cpp{Expected<E, T>}:
 \label{divide-example}
 %%%%%%%%%%%
 
-This first example shows how to define a safe divide operation checking for divide-by-zero conditions. Using exceptions, we might write something like this:
+This example shows how to define a safe divide operation checking for divide-by-zero conditions. Using exceptions, we might write something like this:
 
 \begin{lstlisting}
 struct DivideByZero: public std::exception {...};
 
-int safe_divide(int i, int j)
+double safe_divide(double i, double j)
 {
   if (j==0) throw DivideByZero();
   else return i / j;
 }
 \end{lstlisting}
 
-\noindent
-Which, using \cpp{expected<exception_ptr,int>}, turns to:
+With \cpp{Expected<E,T>}, we are not required to use exceptions, we can use \cpp{std::error_condition} which is easier to introspect than \cpp{std::exception_ptr} if we want to use the error. For the purpose of this example, we use the following enumeration (the boilerplate code concerning \cpp{std::error_condition} is not shown):
 
 \begin{lstlisting}
-expected<exception_ptr,int> safe_divide(int i, int j)
+enum class arithmetic_errc
 {
-  if (j==0) return make_unexpected(DivideByZero()); // (1)
+  divide_by_zero,   // 9/0 == ?
+  not_integer_division  // 5/2 == 2.5 (which is not an integer)
+};
+\end{lstlisting}
+
+\noindent
+Using \cpp{expected<error_condition, double>}, the code becomes:
+
+\begin{lstlisting}
+expected<error_condition, double> safe_divide(double i, double j)
+{
+  if (j==0) return make_unexpected(arithmetic_errc::divide_by_zero); // (1)
   else return i / j; // (2)
 }
 \end{lstlisting}
 
-(1) The implicit conversion from \cpp{unexpected_type<E>} to \cpp{expected<E,T>} and (2) from \cpp{T} to \cpp{expected<E,T>} prevents using too much boilerplate code. The advantages are that we have a clean way to fail without using the exception machinery, and we can give precise information about why it failed as well. The liability is that this function is going to be tedious to use. For instance, the exception based function:
+(1) The implicit conversion from \cpp{unexpected_type<E>} to \cpp{expected<E,T>} and (2) from \cpp{T} to \cpp{expected<E,T>} prevents using too much boilerplate code. The advantages are that we have a clean way to fail without using the exception machinery, and we can give precise information about why it failed as well. The liability is that this function is going to be tedious to use. For instance, the exception-based function $i + j/k$ is:
 
 \begin{lstlisting}
-int f1(int i, int j, int k)
+double f1(double i, double j, double k)
 {
   return i + safe_divide(j,k);
 }
 \end{lstlisting}
 
 \noindent
-becomes using \texttt{expected<exception_ptr,int>}:
+but becomes using \texttt{expected<error_condition, double>}:
 
 \begin{lstlisting}
-expected<exception_ptr,int> f1(int i, int j, int k)
+expected<error_condition, double> f1(double i, double j, double k)
 {
   auto q = safe_divide(j, k)
   if(q) return i + *q;
@@ -237,90 +247,38 @@ expected<exception_ptr,int> f1(int i, int j, int k)
 \end{lstlisting}
 
 \noindent
-However \cpp{expected<E,T>} delivers cleaner code when used in a functional style:
+This example clearly doesn't respect the ``clean code'' characteristic introduced in section \ref{motiv-scope} and the readability doesn't differ much from the ``C return code''. Hopefully, we can see \cpp{expected<E,T>} through functional glasses as a monad. The code is cleaner using the member function \cpp{map}. This way, the error handling is not explicitly mentioned but we still know, thanks to the call to \cpp{map}, that something is going underneath and thus it is not as silent as exception.
 
 \begin{lstlisting}
-expected<exception_ptr,int> f1(int i, int j, int k)
+expected<error_condition, double> f1(double i, double j, double k)
 {
-  return safe_divide(j, k).map([&](int q){
+  return safe_divide(j, k).map([&](double q){
     return i + q;
   });
 }
 \end{lstlisting}
 
-The \cpp{map} members calls the continuation provided if expected contains a value, otherwise it forwards the error to the callee. Using lambda function might clutter the code, so here an example using functor:
+The \cpp{map} member calls the continuation provided if expected contains a value, otherwise it forwards the error to the callee. Using lambda function might clutter the code, so here the same example using functor:
 
 \begin{lstlisting}
-expected<exception_ptr,int> f1(int i, int j, int k)
+expected<error_condition, double> f1(double i, double j, double k)
 {
   return safe_divide(j, k).map(bind(plus, i, _1));
 }
 \end{lstlisting}
 
-We can use \cpp{expected<E, T>} to represent different error conditions. For instance, with integer division, we might want to fail if the two numbers are not evenly divisible as well as checking for division by zero. We can improve our \cpp{safe_divide} function accordingly:
+We can use \cpp{expected<E, T>} to represent different error conditions. For instance, with integer division, we might want to fail if the two numbers are not evenly divisible as well as checking for division by zero. We can overload our \cpp{safe_divide} function accordingly:
 
 \begin{lstlisting}
-struct NotDivisible: public std::exception
+expected<error_condition, int> safe_divide(int i, int j)
 {
-  int i, j;
-  NotDivisible(int i, int j) : i(i), j(j) {}
-};
-
-expected<exception_ptr,int> safe_divide(int i, int j)
-{
-  if (j == 0) return make_unexpected(DivideByZero()); 
-  if (i%j != 0) return make_unexpected(NotDivisible(i,j));
-  else return i / j; 
+  if (j == 0) return make_unexpected(arithmetic_errc::divide_by_zero); 
+  if (i%j != 0) return make_unexpected(arithmetic_errc::not_integer_division);
+  else return i / j;
 }
 \end{lstlisting}
 
-Now we have a division function for integers that possibly fail in two ways. However, it's not easy to write code that detect which of the two conditions occurred. For instance, we might have situations where dividing two integers which are not evenly divisible is OK (we just throw away the remainder) but division by zero is probably never going to be OK. Let's try to write this using our safe_divide function, first using exceptions:
-
-\begin{lstlisting}
-T divide(T i, T j)
-{
-  try
-  {
-    return safe_divide(i,j)
-  }
-  catch(NotDivisible& ex)
-  {
-    return ex.i/ex.j;
-  }
-  catch(...)
-  {
-    throw;
-  }
-}
-\end{lstlisting}
-
-\noindent
-and then using \cpp{expected<E,T>}:
-
-\begin{lstlisting}
-expected<exception_ptr,int> divide(int i, int j)
-{
-  auto e = safe_divide(i,j);
-  if(e.has_exception<NotDivisible>())
-    return i/j;
-  else 
-    return e;
-}
-\end{lstlisting}
-
-\noindent
-The \cpp{has_exception} function throws the contained exception and thus should not be called multiple times to discriminate over exceptions in an if-else statement if we care about performances. A more efficient way is shown in section \ref{exception-based-expected}. 
-
-\begin{lstlisting}
-expected<exception_ptr,int> divide(int i, int j)
-{
-  return safe_divide(i,j).catch_excception<NotDivisible>([](auto &ex)
-    return ex.i/ex.j;
-  });
-}
-\end{lstlisting}
-
-Lets continue with the exception-oriented function $i/k + j/k$:
+Now we have a division function for integers that possibly fail in two ways. We continue with the exception-oriented function $i/k + j/k$:
 
 \begin{lstlisting}
 int f2(int i, int j, int k)
@@ -330,22 +288,20 @@ int f2(int i, int j, int k)
 \end{lstlisting}
 
 \noindent
-Now let's write this code using an \cpp{expected<E,T>} type and an imperative flavour:
+Now let's write this code using an \cpp{expected<E,T>} type and the functional \cpp{map} already used previously.
 
 \begin{lstlisting}
-expected<exception_ptr,int> f2(int i, int j, int k)
+expected<error_condition, int> f(int i, int j, int k)
 {
-  auto q1 = safe_divide(i, k);
-  if (!q1) return q1;
-
-  auto q2 = safe_divide(j, k);
-  if (!q2) return q2;
-
-  return *q1 + *q2;
+  return safe_divide(i, k).map([=](int q1) {
+      return safe_divide(j,k).map([=](int q2) {
+        return q1+q2;
+      });
+    });
 }
 \end{lstlisting}
 
-This is nice in the sense that whenever there is an error we get a specific error result. However the ``clean code'' characteristic introduced in section \ref{motiv-scope} is not well-respected as the readability doesn't differ much from the ``C return code''. We can rewrite this using a functional style using the member function \cpp{bind}\footnote{\cpp{bind} stands for ``monadic bind''.}:as follows:
+The compiler will gently say he can convert an \cpp{expected<error_condition, expected<error_condition, int>>} to \cpp{expected<error_condition, int>}. This is because the member \cpp{map} wraps the result in Expected and since we use twice the \cpp{map} member it wraps it twice. The \cpp{bind}\footnote{To not confound with \cpp{std::bind} which is not related to monad.} member wraps the result of the continuation only if it is not already wrapped. The correct version is as follow:
 
 \begin{lstlisting}
 expected<exception_ptr,int> f(int i, int j, int k)
@@ -358,109 +314,12 @@ expected<exception_ptr,int> f(int i, int j, int k)
 }
 \end{lstlisting}
 
-The error-handling code has completely disappeared but the lambda functions are a new source of noise, and this is even more important with $n$ expected variables. A cleaner solution uses the variadic free function \cpp{map}\footnote{\cpp{map} stands for ``functor map''.}:
-
-\begin{lstlisting}
-expected<exception_ptr,int> f(int i, int j, int k)
-{
-  return map(plus,
-    safe_divide(i, k), 
-    safe_divide(j, k));
-}
-\end{lstlisting}
-
-The function \cpp{map} returns the first erroneous expected argument or, if they all contain a value, the result of the \cpp{plus} operation.
-
-
-Now let's rewrite this using a possible C++ language extension: adding a DO expression like the Haskell do expression. It is something similar  to the \cpp{await} extension for futures however it is not limited to futures. It could works for any monad.   
-
-The grammar could be
-
-\begin{lstlisting}
-do-expression ::= do-initialization ':' do-expression-or-expression
-
-do-expression-or-expression ::= do-expression | expression
-
-do-initialization ::= type var '<-' expression
-\end{lstlisting}
-
-The meaning of \cpp{do-expression}  is given by a transformation \cpp{[[ ]]}
-
-\begin{lstlisting}
-[[do-expression]] =
-  bind(expression,[&](type var) {
-    return [[do-expression-or-expression]]
-  });
-\end{lstlisting}
-
-The previous function could be written as
-
-\begin{lstlisting}
-expected<exception_ptr,int> f2(int i, int j, int k)
-{
-  return (
-  	auto s1 <- safe_divide(i, k) :
-  	auto s2 <- safe_divide(j, k) :
-   	s1 + s2
-  );
-}
-\end{lstlisting}
-
-resulting in the transformed C++ code
-
-\begin{lstlisting}
-expected<exception_ptr,int> f2(int i, int j, int k)
-{
-  return bind(safe_divide(i, k) ,[&r](auto s1) {
-    return bind(safe_divide(j, k),[&r](auto s2) {
-      return s1 + s2;
-    });
-  }); 
-}
-\end{lstlisting}
-
-This would give the exact same results as the previous version. However, the function \cpp{f2} is much simpler and clearer than \cpp{f} because it doesn't have to explicitly handle any of the error cases. When an error case occurs, it is returned as the result of the function, but if not, the correct result of a subexpression is bound to a name (\cpp{s1} or \cpp{s2}), and that result can be used in later parts of the computation. The code is a lot simpler to write. The more complicated the error-handling function, the more important this will be.
-
-But, the standard doesn't have this DO expression yet.
-Waiting for a do-statement the user could define some macros (see \cite{monad_do_poc} and define \cpp{f2} as
-
-\begin{lstlisting}
-expected<exception_ptr,int> f2(int i, int j, int k)
-{
-    return DO (
-         ( s1, safe_divide(i, k) )
-         ( s2, safe_divide(j, k) )
-         s1 + s2 
-    );
-}
-\end{lstlisting}
-
-In the case of expected and optional, that is, monads that are always ready and have only one value stored, the following macro 
-
-\begin{lstlisting}
-#define EXPECT(V, EXPR) \
-auto BOOST_JOIN(expected,V) = EXPR; \
-if (! has_value(BOOST_JOIN(expected,V))) return get_unexpected(BOOST_JOIN(expected,V)); \
-auto V = deref(BOOST_JOIN(expected,V))
-\end{lstlisting}
-
-can be used to obtain the same result.
-
-\begin{lstlisting}
-expected<exception_ptr,int> f2(int i, int j, int k)
-{
-  EXPECT(s1, safe_divide(i, k) );
-  EXPECT(s2, safe_divide(j, k));
-  return s1 + s2;
-}
-\end{lstlisting}
-
-Note that this meaning of EXPECT is not valid for the list monad. 
+The error-handling code has completely disappeared but the lambda functions are a new source of noise, and this is even more important with $n$ expected variables. Propositions for a better monadic experience are discussed in section \ref{better-support-for-monad}, the subject is left open and is considered out of scope of this proposal.
 
 \subsection{Error retrieval and correction}
 %%%%%%%%%%%%%%%%
 
-The major advantage of \cpp{expected<E,T>} over \cpp{optional<T>} is the ability to transport un error, but we didn't come yet to an example that retrieve the error. First of all, we should wonder what a programmer do when a function call returns an error:
+The major advantage of \cpp{expected<E,T>} over \cpp{optional<T>} is the ability to transport an error, but we didn't come yet to an example that retrieve the error. First of all, we should wonder what a programmer do when a function call returns an error:
 
 \begin{enumerate}
  \item Ignore it.
@@ -468,116 +327,38 @@ The major advantage of \cpp{expected<E,T>} over \cpp{optional<T>} is the ability
  \item Trying to resolve the error.
 \end{enumerate}
 
-Because the first behaviour might lead to buggy application, we won't consider it in a first time. The handling is dependent of the underlying error type, we consider the \cpp{exception_ptr} and the \cpp{error_condition} types.
+Because the first behavior might lead to buggy application, we won't consider it in a first time. The handling is dependent of the underlying error type, we consider the \cpp{exception_ptr} and the \cpp{error_condition} types.
 
-\subsubsection{Exception-based expected}
-\label{exception-based-expected}
-
-The following example (previously introduced in section \ref{divide-example}) shows how to transform an expected interface into the corresponding exception one's. It is useful if we want to switch over different error-handling style.
+We spoke about how to use the value contained in the Expected but didn't discuss yet the error usage. A first imperative way to use our error is to simply extract it from the Expected using the \cpp{error()} member function. The following example shows a \cpp{divide2} function that return 0 if the error is \cpp{divide_by_zero}:
 
 \begin{lstlisting}
-int f2(int i, int j, int k)
-{
-  // if the underlying expected doesn't contain a value
-  // it throws the contained exception.
-  int q1 = safe_divide(i, k).value();
-  int q2 = safe_divide(j, k).value();
-
-  return q1 + q2;
-}
-\end{lstlisting}
-
-In some cases, even if the underlying error system is exception-based, we don't want to throw it away but to directly recover from the unexpected value. 
-
-\begin{lstlisting}
-int divide_or_0(int i, int j) noexcept
+expected<error_condition, int> divide2(int i, int j)
 {
   auto e = safe_divide(i,j);
-  return *(e.catch_error(const exception_ptr& e) {
+  if (!e && e.error().value() == arithmetic_errc::divide_by_zero) {
     return 0;
-  }));
-}
-\end{lstlisting}
-
-The \cpp{catch_error} function calls the continuation if the expected is erroneous. In some case, we'll be able to recover only from a subset of the possible error. With exception, the most efficient way is to throw the contained exception and catch the ones we're able to recover from.
-
-\begin{lstlisting}
-expected<exception_ptr,int> divide_lower_bound(int i, int j)
-{
-  auto e = safe_divide(i,j);
-  return e.catch_error(const exception_ptr& e) {
-    try
-    {
-      rethrow_exception(e);
-    }
-    // If it failed because it wasn't an integer division.
-    catch(const NotDivisible& d)
-    {
-      return d.i/d.j;
-    }
-    catch(...)
-    {
-      return make_unexpected(e);
-    }
-  });
-}
-\end{lstlisting}
-
-Some might argue that this solution is nearly identical to the one with exception-only presented in section \ref{divide-example}. The main advantages are the error treatment isolation (it can be encapsulated in a function) and we keep the basic advantages of expected despite manipulating exception.
-
-A better alternative in this case is to use the catch_exception member function
-
-\begin{lstlisting}
-expected<exception_ptr,int> divide_lower_bound(int i, int j)
-{
-  return safe_divide(i,j)
-  .catch_exception<NotDivisible>(auto& d) // If it failed because it wasn't divisible.
-    {
-      return d.i/d.j;
-    }
-  );
-}
-\end{lstlisting}
-
-\subsubsection{Error-based expected}
-
-The two last examples would work similarly with any other kinds of error. For example here we're using the \cpp{error_condition} type.
-
-When the \cpp{Error} template parameter is not \cpp{std::exception_ptr}, the functions \cpp{has_exception()} and \cpp{catch_exception()} have no sense. In this case the user could use the member function \cpp{error())}.
-  
-\begin{lstlisting}
-expected<error_condition, int> divide_lower_bound(int i, int j)
-{
-  auto e = safe_divide(i,j);
-  if ( !e && e.error() == divide_err::not_divisible ) {
-    return i/j;
   }
   return e;
 }
 \end{lstlisting}
 
-The member function \cpp{catch_error} could be used with a continuations passing style to try to recover from an error.
+This imperative way is not entirely satisfactory since it suffers from the same disadvantages than \cpp{value()}. Again, a functional view leads to a better solution. The \cpp{catch_error} member calls the continuation passed as argument if the expected is erroneous.
 
 \begin{lstlisting}
-expected<error_condition, int> divide_lower_bound(int i, int j)
+expected<error_condition, int> divide3(int i, int j)
 {
   auto e = safe_divide(i,j);
-  return e.catch_error([i,j](const error_condition& e){
-    if(e.value() == divide_err::not_divisible)
+  return e.catch_error([](const error_condition& e){
+    if(e.value() == arithmetic_errc::divide_by_zero)
     {
-      return i/j;
+      return 0;
     }
-    else
-    {
-      return make_unexpected(e);
-    }
+    return make_unexpected(e);
   });
 }
 \end{lstlisting}
 
-The code is similar to the one with exceptions but do not suffer from performance issue since we don't re-throw exceptions.
-
-As \cpp{expected<error_condition, int>} doesn't store a exception, when it doesn't contains a value the member function \cpp{value} throws a \cpp{bad_expected_access} exception wrapping the stored error. 
+An advantage of this version is to be coherent with the \cpp{bind} and \cpp{map} functions. It also provides a more uniform way to analyze error and recover from some of these. Finally, it encourages the user to code its own ``error-resolver'' function and leads to a code with distinct treatment layers.
 
 \section{Impacts on the Standard}
 %%%%%%%%%%%%%%%%%
@@ -1611,6 +1392,108 @@ The table \ref{comp-monads} presents a brief comparison between \cpp{optional<T>
 
 \section{Open points}
 %%%%%%%%%%%%%
+
+\subsection{Better support for monad}
+\label{better-support-for-monad}
+
+A cleaner solution uses the variadic free function \cpp{map}\footnote{\cpp{map} stands for ``functor map''.}:
+
+\begin{lstlisting}
+expected<exception_ptr,int> f(int i, int j, int k)
+{
+  return map(plus,
+    safe_divide(i, k), 
+    safe_divide(j, k));
+}
+\end{lstlisting}
+
+The function \cpp{map} returns the first erroneous expected argument or, if they all contain a value, the result of the \cpp{plus} operation.
+
+
+Now let's rewrite this using a possible C++ language extension: adding a DO expression like the Haskell do expression. It is something similar  to the \cpp{await} extension for futures however it is not limited to futures. It could works for any monad.   
+
+The grammar could be
+
+\begin{lstlisting}
+do-expression ::= do-initialization ':' do-expression-or-expression
+
+do-expression-or-expression ::= do-expression | expression
+
+do-initialization ::= type var '<-' expression
+\end{lstlisting}
+
+The meaning of \cpp{do-expression}  is given by a transformation \cpp{[[ ]]}
+
+\begin{lstlisting}
+[[do-expression]] =
+  bind(expression,[&](type var) {
+    return [[do-expression-or-expression]]
+  });
+\end{lstlisting}
+
+The previous function could be written as
+
+\begin{lstlisting}
+expected<exception_ptr,int> f2(int i, int j, int k)
+{
+  return (
+    auto s1 <- safe_divide(i, k) :
+    auto s2 <- safe_divide(j, k) :
+    s1 + s2
+  );
+}
+\end{lstlisting}
+
+resulting in the transformed C++ code
+
+\begin{lstlisting}
+expected<exception_ptr,int> f2(int i, int j, int k)
+{
+  return bind(safe_divide(i, k) ,[&r](auto s1) {
+    return bind(safe_divide(j, k),[&r](auto s2) {
+      return s1 + s2;
+    });
+  }); 
+}
+\end{lstlisting}
+
+This would give the exact same results as the previous version. However, the function \cpp{f2} is much simpler and clearer than \cpp{f} because it doesn't have to explicitly handle any of the error cases. When an error case occurs, it is returned as the result of the function, but if not, the correct result of a subexpression is bound to a name (\cpp{s1} or \cpp{s2}), and that result can be used in later parts of the computation. The code is a lot simpler to write. The more complicated the error-handling function, the more important this will be.
+
+But, the standard doesn't have this DO expression yet.
+Waiting for a do-statement the user could define some macros (see \cite{monad_do_poc} and define \cpp{f2} as
+
+\begin{lstlisting}
+expected<exception_ptr,int> f2(int i, int j, int k)
+{
+    return DO (
+         ( s1, safe_divide(i, k) )
+         ( s2, safe_divide(j, k) )
+         s1 + s2 
+    );
+}
+\end{lstlisting}
+
+In the case of expected and optional, that is, monads that are always ready and have only one value stored, the following macro 
+
+\begin{lstlisting}
+#define EXPECT(V, EXPR) \
+auto BOOST_JOIN(expected,V) = EXPR; \
+if (! has_value(BOOST_JOIN(expected,V))) return get_unexpected(BOOST_JOIN(expected,V)); \
+auto V = deref(BOOST_JOIN(expected,V))
+\end{lstlisting}
+
+can be used to obtain the same result.
+
+\begin{lstlisting}
+expected<exception_ptr,int> f2(int i, int j, int k)
+{
+  EXPECT(s1, safe_divide(i, k) );
+  EXPECT(s2, safe_divide(j, k));
+  return s1 + s2;
+}
+\end{lstlisting}
+
+Note that this meaning of EXPECT is not valid for the list monad. 
 
 \subsection{Allocator support}
 %%%%%%%%%%%%%%%
