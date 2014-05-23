@@ -589,26 +589,23 @@ The usage of \cpp{make_unexpected} is also a consequence of the adapted model fo
 \subsection{Observers}
 %%%%%%%%%%%%%%%%%%
 
-In order to be as efficient as possible, this proposal includes observers with narrow and wide contracts. Thus, the \cpp{value()} function has a wide contract. If the expected object doesn't contains a value an exception is thrown. However, when the user know that the expected object is valid, the use of \cpp{operator*} would be more appropriated. 
+In order to be as efficient as possible, this proposal includes observers with narrow and wide contracts. Thus, the \cpp{value()} function has a wide contract. If the expected object doesn't contain a value, an exception is thrown. However, when the user knows that the expected object is valid, the use of \cpp{operator*} would be more appropriated. 
 
 \subsubsection{Explicit conversion to \cpp{bool}}
 %%%%%%%%%%%%%%%%%%
 
-The same rational described in \cite{OptionalRev4} for \cpp{optional<T>} applies to \cpp{expected<E,T>} and so, the following example would combine initialization and  checking for been valued in a condition.
+The rational described in \cite{OptionalRev4} for \cpp{optional<T>} applies to \cpp{expected<E,T>} and so, the following example combines initialization and value-checking in a boolean context.
 
 \begin{lstlisting}
-if (expected<exception_ptr, char> ch = readNextChar()) {
+if (expected<error_condition, char> ch = readNextChar()) {
   // ...
 }
 \end{lstlisting}
 
-
 \subsubsection{Accessing the contained value}
 %%%%%%%%%%%%%%%%%%
 
-Even if \cpp{expected<E,T>} has not been used in practice for a while as Boost.Optional, we consider that following the same interface that \cpp{std::experimental::optional<T>} makes the C++ standard library more homogeneous. 
-
-The same rational described in \cite{OptionalRev4} for \cpp{optional<T>} applies to \cpp{expected<E,T>}. 
+Even if \cpp{expected<E,T>} has not been used in practice for a while as Boost.Optional, we consider that following the same interface that \cpp{std::experimental::optional<T>} makes the C++ standard library more homogeneous. The rational described in \cite{OptionalRev4} for \cpp{optional<T>} applies to \cpp{expected<E,T>}. 
 
 \subsubsection{Dereference operator}
 %%%%%%%%%%%%%%%%%%
@@ -619,14 +616,16 @@ It was chosen to use indirection operator because, along with explicit conversio
 if (p) use(*p);
 \end{lstlisting}
 
-This pattern is used for all sort of pointers (smart or dumb), \cpp{optional} and it clearly indicates the fact that the value may be missing and that we return a reference rather than a value. The indirection operator has risen some objections because it may incorrectly imply that \cpp{expected} and \cpp{optional} are a (possibly smart) pointer, and thus provides shallow copy and comparison semantics. All library components so far use indirection operator to return an object that is not part of the pointer's/iterator's value. In contrast, \cpp{expected} as \cpp{optional} indirects to the part of its own state. We do not consider it a problem in the design; it is more like an unprecedented usage of indirection operator. We believe that the cost of potential confusion is overweighed by the benefit of an easy to grasp and intuitive interface for accessing the contained value.
+This pattern is used for all sort of pointers (smart or raw) and \cpp{optional}; it clearly indicates the fact that the value may be missing and that we return a reference rather than a value. The indirection operator has risen some objections because it may incorrectly imply that \cpp{expected} and \cpp{optional} are a (possibly smart) pointer, and thus provides shallow copy and comparison semantics. All library components so far use indirection operator to return an object that is not part of the pointer's/iterator's value. In contrast, \cpp{expected} as well as \cpp{optional} indirects to the part of its own state. We do not consider it a problem in the design; it is more like an unprecedented usage of indirection operator. We believe that the cost of potential confusion is overweighted by the benefit of an intuitive interface for accessing the contained value.
 
 We do not think that providing an implicit conversion to \cpp{T} would be a good choice. First, it would require different way of checking for the empty state; and second, such implicit conversion is not perfect and still requires other means of accessing the contained value if we want to call a member function on it.
 
-Using the indirection operator for a object that doesn't contains a value is an undefined behavior. This behavior offers maximum runtime performance.
+Using the indirection operator for a object that doesn't contain a value is an undefined behavior. This behavior offers maximum runtime performance.
 
 \subsubsection{Function value}
 %%%%%%%%%%%%%%%%%%
+\todo{Modify if we chose to use a trait, also it needs to be refreshed and we must indicate the alternative choice to retrieve the value (bind and map) which are more appropriate in many cases.}
+
 
 In addition to the indirection operator, we propose the member function value as in \cite{OptionalRev4} that returns a reference to the contained value if one exists or throws an exception otherwise:
 
@@ -681,282 +680,68 @@ The advantage is the user could overload the function for other errors, as \cpp{
 
 \cpp{bad_expected_access<E>} and \cpp{bad_optional_access} could inherit both from a \cpp{bad_access} exception derived from \cpp{logic_error}, but this is not proposed.
 
-
-\subsubsection{Getting the contained value on the context of a continuation}
-%%%%%%%%%%%%%%%%%%%%%%%
-
 \subsubsection{Accessing the contained error}
 %%%%%%%%%%%%%%%%%%%%%%%
 
-Usually the access to the contained error is done once we know that the expected object has no value. This is why the \cpp{error()} function has a narrow contract, it works only if (\cpp{! *this}).
+Usually, accessing the contained error is done once we know the expected object has no value. This is why the \cpp{error()} function has a narrow contract: it works only if \cpp{!(*this)}.
 
 \begin{lstlisting}
-  expected<errc,int> getIntOrZero(istream_range& r);
-    auto r = getInt();  // won't throw
-    if ( ! r && r.error() == errc::empty_stream ) {
-        return 0;
-    }
-    return r;
+expected<errc,int> getIntOrZero(istream_range& r){
+  auto r = getInt();  // won't throw
+  if (!r && r.error() == errc::empty_stream){
+    return 0;
   }
+  return r;
+}
 \end{lstlisting}
+
+\noindent
+This behavior could not be obtained with the \cpp{value_or()} method since we want to return 0 only if the error is equal to \cpp{empty_stream}.
 
 \subsubsection{Conversion to the unexpected value}
 %%%%%%%%%%%%%%%%%%
 
-As the \cpp{error()} function the \cpp{get_unexpected()} works only if the expected object has no value. It is used to propagate errors.
+As the \cpp{error()} function, the \cpp{get_unexpected()} works only if the expected object has no value. It is used to propagate errors. Note that the following equivalences yield:
+
+\begin{lstlisting}
+f.get_unexpected() == make_unexpected(f.error());
+f.get_unexpected() == expected<E, T>{unexpect, f.error()};
+\end{lstlisting}
+
+\noindent
+This member is provided for convenience, it is further demonstrated in the next example:
 
 \begin{lstlisting}
 expected<errc, pair<int, int>> getIntRange(istream_range& r) {
-  auto  f = getInt(r);
-  if (! f) return f.get_unexpected();
+  auto f = getInt(r);
+  if (!f) return f.get_unexpected();
 
-  auto  m = matchedString("..", r);
-  if (! m) return m.get_unexpected();
+  auto m = matchedString("..", r);
+  if (!m) return m.get_unexpected();
 
-  auto  l = getInt(r);
-  if (! l) return l.get_unexpected();
+  auto l = getInt(r);
+  if (!l) return l.get_unexpected();
 
   return std::make_pair(*f, *l);
 }
 \end{lstlisting}
 
-It is not really necessary as the line 
-
-\begin{lstlisting}
-  return f.get_unexpected();
-\end{lstlisting}
-
-can be replaced by
-
-\begin{lstlisting}
-  return make_unexpected(f.error());
-\end{lstlisting}
-
-or even
-
-\begin{lstlisting}
-  return expected<errc, pair<int, int>>{unexpect, f.error()};
-\end{lstlisting}
-
-However, the function is provided for symmetry purpose. Implicit conversion from \cpp{unexpected<E>} to \cpp{expected<E,T>} and explicit conversion from  \cpp{expected<E,T>} to  \cpp{unexpected<E>}. 
-
-\subsubsection{Function \cpp{has_exception}}
-%%%%%%%%%%%%%%%%%%%%%%%%
-
-\cite{AlexandrescuExpected} Expected class has a \cpp{hasException<E>} function that checks if the expected object has a stored exception that derived from \cpp{E}. This function has a sense only when the error parameter is a exception type erased as \cpp{std::exception_ptr} that contains any exception. This function is useful when the user don't needs to get more information than the type of the stored exception.
-
-\begin{lstlisting}
-expected<exception_ptr,int> getIntOrZero(istream_range& r) {
-    auto r = getInt();  // won't throw
-    if (r.has_exception<EmptyStream>() {
-        return 0;
-    }
-    return r;
-}
-\end{lstlisting}
-
-
-\subsubsection{Function \cpp{catch_exception}}
-%%%%%%%%%%%%%%%%%%
-
-When the user wants to retrieve the whole information on the stored exception the function \cpp{catch_exception}  can be used instead.
-
-\begin{lstlisting}
-  expected<exception_ptr,int> getIntOrZero(istream_range& r) 
-  {
-    return getInt().
-    catch_exception<NotANumber>([](auto& ex) // (1)
-    {  // has complete access to the stored exception
-  
-    });   // try to recover
-  }
-\end{lstlisting}
-
-\cpp{catch_exception<E>} call to the function parameter if the expected instance has no value and the stored exception match the type.
+\cpp{get_unexpected} is also provided for symmetry purpose. On one side, there is an implicit conversion from \cpp{unexpected<E>} to \cpp{expected<E,T>} and on the other side there is an explicit conversion from \cpp{expected<E,T>} to \cpp{unexpected<E>}. A more pleasant function manipulating error is \cpp{catch_error(F)} and is explained in the monadic operations in section \ref{monadic-operations}.
 
 \subsubsection{Function \cpp{value_or}}
 %%%%%%%%%%%%%%%%%%
 
-This function template returns a value stored by the \cpp{expected} object if it is valued, and if not, it falls back to the default value specified in the second argument. This method for specifying default values on the fly rather than tying the default values to the type is based on the observation that different contexts or usages require different default values for the same type. For instance the default value for \cpp{int} can be \cpp{0} or \cpp{-1}. The callee might not know what value the caller considers special, so it returns the lack of the requested value explicitly. The caller may be better suited to make the choice what special value to use.
+The function member \cpp{value_or()} has the same semantics than \cpp{optional}\cite{OptionalRev4} since the type of \cpp{E} doesn't matter; hence we can consider that \cpp{E == nullopt_t} and the optional semantics yields. Using the monadic interface, we can achieve a similar behavior:
 
 \begin{lstlisting}
-expected<exception_ptr,int> queryDB(std::string);
-void setPieceCount(int);
-void setMaxCount(int);
-
-setPieceCount( queryDB("select piece_count from ...").value_or(0) );
-setMaxCount( queryDB("select max_count from ...").value_or(numeric_limits<int>::max()) );
+auto x = getInt();
+int x = *(x.catch_error([](auto){return 0;})); // identical to x.value_or(0);
 \end{lstlisting}
-
-The decision to provide this function is controversial itself. As pointed out by Robert Ramey, the goal of the optional is to make the lack of the value explicit. Its syntax forces two control paths; therefore we will typically see an if-statement (or similar branching instruction) wherever expected is used. This is considered an improvement in correctness. On the other hand, using the default value appears to conflict with the above idea. One other argument against providing it is that in many cases you can use a ternary conditional operator instead:
-
-\begin{lstlisting}
-auto&& cnt = queryDB("select piece_count from ...");
-setPieceCount(cnt ? *cnt : 0);
-
-auto&& max = queryDB("select max_count from ...");
-setMaxCount(max ? std::move(*max) : numeric_limits<int>::max());
-\end{lstlisting}
-
-However, in case expected objects are returned by value and immediately consumed, the ternary operator syntax requires introducing an lvalue. This requires more typing and explicit move. This in turn makes the code less safe because a moved-from lvalue is still accessible and open for inadvertent misuse.
-
-There are reasons to make it a free-standing function. (1) It can be implemented by using only the public interface of optional. (2) This function template could be equally well be applied to any type satisfying the requirements of \cpp{NullableProxy}. In this proposal, function \cpp{value_or} is defined as a member function. Making a premature generalization would risk standardizing a function with suboptimal performance/utility. While we know what detailed semantics (e.g., the return type) \cpp{value_or} should have for \cpp{expected}, we cannot claim to know the ideal semantics for any \cpp{NullableProxy}. Also, it is not clear to us if this convenience function is equally useful for pointers, as it is for optional objects. By making \cpp{value_or} a member function we leave the room for this name in namespace \cpp{std} for a possible future generalization.
-
-The second argument in the function template's signature is not \cpp{T} but any type convertible to \cpp{T}:
-
-\begin{lstlisting}
-template <class T, class E, class V> 
-  typename T expected<E,T>::value_or(V&& v) const&;
-template <class T, class E, class V> 
-  typename T expected<E,T>::value_or(V&& v) &&;
-\end{lstlisting}
-
-This allows for a certain run-time optimization. In the following example:
-
-\begin{lstlisting}
-expected<int, string> ex{"cat"};
-string ans = ex.value_or("dog");
-
-Because the expected object is valued, we do not need the fallback value and therefore to convert the string literal "dog" into type \cpp{string}.
-
-It has been argued that the function should return by constant reference rather than value, which would avoid copy overhead in certain situations:
-
-\begin{lstlisting}
-void observe(const X& x);
-
-expected<exception_ptr,X> ex { /* ... */ };
-observe( ex.value_or(X{args}) );    // unnecessary copy
-\end{lstlisting}
-
-However, the benefit of the function \cpp{value_or} is only visible when the optional object is provided as a temporary (without the name); otherwise, a ternary operator is equally useful:
-
-\begin{lstlisting}
-expected<exception_ptr,X> ex { /* ... */ };
-observe(ox ? *ek : X{args});            // no copy
-\end{lstlisting}
-
-Also, returning by reference would be likely to render a dangling reference, in case the expected object is invalid, because the second argument is typically a temporary:
-
-\begin{lstlisting}
-expected<exception_ptr,X> ex {};
-auto&& x = ex.value_or(X{args});
-cout << x;                              // x is dangling!
-\end{lstlisting}
-
-There is also one practical problem with returning a reference. The function takes two arguments by reference: the expected object and the default value. It can happen that one is deduced as lvalue reference and the other as rvalue reference. In such case we would not know what kind of reference to return. Returning lvalue reference might prevent move optimization; returning an rvalue reference might cause an unsafe move from lvalue. By returning by value we avoid these problems by requiring one unnecessary move in some cases.
-
-We also do not want to return a constant lvalue reference because that would prevent a copy elision in cases where optional object is returned by value.
-
-As for \cpp{std::experimental::optional<T>} the function \cpp{expected<E,T>::value_or<V>} could return type \cpp{decay_t<common_type_t<T, V>} rather than \cpp{T}. This would avoid certain problems, such as loss of accuracy on arithmetic types:
-
-\begin{lstlisting}
-// not proposed
-expected<E,int> op = /* ... */;
-long gl = /* ... */;
-
-auto lossless = op.value_or(gl);   // lossless deduced as long rather than int
-\end{lstlisting}
-
-However, to be alined with \cpp{std::experimental::optional<T>}  we do not propose it at this time.
-
-Together with function \cpp{value}, \cpp{value_or} makes a set of similarly called functions for accessing the contained value that do not cause an undefined behavior when invoked on a invalid expected (at the expense of runtime overhead). They differ though, in the return type: one returns a value, the other a reference.
 
 \subsubsection{Relational operators}
 %%%%%%%%%%%%%%%%%%
 
-As \cpp{optional}, one of the design goals of \cpp{expected} is that objects of type \cpp{expected<E,T>} should be valid elements in STL containers and usable with STL algorithms (at least if objects of type \cpp{T} and \cpp{E} are). Equality comparison is essential for \cpp{expected<E,T>} to model concept \cpp{Regular}. C++ does not have concepts, but being regular is still essential for the type to be effectively used with STL. Ordering is essential if we want to store expected values in ordered associative containers. A number of ways of including the unexpected state in comparisons have been suggested. The ones proposed, have been crafted such that the axioms of equivalence and strict weak ordering are preserved: unexpected values stored in \cpp{expected<E,T>} are simply treated as additional values that are always different from \cpp{T}; these values are always compared as less than any value of \cpp{T} when stored in an expected object. 
-   
-The main issue is how to compare the unexpected values between them.  \cpp{operator==()} is defined for \cpp{exception_ptr}, using shallow semantics but there is no order between two \cpp{exception_ptr}.
-
-\begin{lstlisting}
-template <class T, class E>
-constexpr bool operator<(const expected<E,T>& x, const expected<E,T>& y)
-{
-  return (x)
-       ? (y) ? *x < *y : false
-       : (y) ? true : ?<?;
-}
-
-template <class T, class E>
-constexpr bool operator==(const expected<E,T>& x, const expected<E,T>& y)
-{
-    return (x)
-         ? (y) ? *x == *y : false
-         : (y) ? false : ?==?;
-}
-\end{lstlisting}
-
-If we follow the \cpp{optional<T>} semantics, two unexpected values should always be equal and do not compare. That is, \cpp{?<?} should be substituted by \cpp{false} and \cpp{?==?} by \cpp{true}. However considering all the unexpected value equals seems counterintuitive.
-
-The alternative consists in forwarding the request to the respective  \cpp{unexpected_type<E>} relational operators. That is, \cpp{?<?} should be substituted by \cpp{x.get_unexpected() < y.get_unexpected()} and \cpp{?==?} by \cpp{x.get_unexpected() == y.get_unexpected()}. 
-
-But how to define the relational operators for \cpp{unexpected_type<E>}? We can forward the request to the respective \cpp{E} relational operators when \cpp{E} defines these operators and follows the \cpp{optional<T>} semantics otherwise. 
-
-The case of \cpp{unexpected_type<std::exception_ptr>} could follow the \cpp{optional<T>} semantics as the shallow comparison is not very useful.
-
-This limitation is one of the main motivations for having a user defined type with strict weak ordering. E.g. if the user know the exact types of the exceptions that can be thrown \cpp{E1}, ..., \cpp{En}, the error parameter could be some kind of \cpp{variant<E1, ... En>} for which a strict weak ordering can be defined. If the user would like to take care of unknown exceptions something like \cpp{optional<variant<E1, ... En>>} would be a quite appropriated model. 
-
-\begin{lstlisting}
-expected<int, unsigned> e0{0};
-expected<int, unsigned> e1{1};
-expected<int, unsigned> eN{unexpect, -1};
-
-assert (eN < e0);
-assert (e0 < e1);
-assert (!(eN  < eN));
-assert (!(e1 < e1));
-
-assert (eN != e0);
-assert (e0 != e1);
-assert (eN == eN);
-assert (e0 == e0);
-\end{lstlisting}
-
-Unexpected values could have been as well considered greater than any value of \cpp{T}. The choice is a great degree arbitrary. We choose to stick to what \cpp{std::optional} does.
-
-Given that both \cpp{unexpected_type<E>} and \cpp{T} are implicitly convertible to \cpp{expected<E,T>}, this implies the existence and semantics of mixed comparison between \cpp{expected<E,T>} and \cpp{T}, as well as between \cpp{expected<E,T>} and \cpp{unexpected_type<E>}:
-
-\begin{lstlisting}
-assert (eN == make_unexpected(1));
-assert (e0 != make_unexpected(1));
-assert (eN != 1);
-assert (e1 == 1);
-
-assert (eN < 1);
-assert (e0 > make_unexpected(1));
-\end{lstlisting}
-
-Although it is difficult to imagine any practical use case of ordering relation between \cpp{expected<E,T>} and \cpp{unexpected_type<E>}, we still provide it for completness sake.
-
-The mixed relational operators, especially these representing order, between \cpp{expected<E,T>} and \cpp{T} have been accused of being dangerous. In code examples like the following, it may be unclear if the author did not really intend to compare two \cpp{T}'s.
-
-\begin{lstlisting}
-auto count = get_expected_count();
-if (count < 20) {}                        // or did you mean: *count < 20 ?
-if (! count || *count < 20) {}   // verbose, but unambiguous
-\end{lstlisting}
-
-Given that \cpp{expected<E,T>} is comparable and implicitly constructible from \cpp{T}, the mixed comparison is there already. We would have to artificially create the mixed overloads only for them to cause controlled compilation errors. A consistent approach to prohibiting mixed relational operators would be to also prohibit the conversion from \cpp{T} or to also prohibit homogenous relational operators for \cpp{expected<E,T>} ; we do not want to do either, for other reasons discussed in this proposal. Also, mixed relational operations are available in \cpp{std::optional<T>} and we want to maintain the same behavior for \cpp{expected<nullopt_t,T>} and \cpp{optional<T>}. Mixed operators come as something natural when we consider the model "T with additional values".
-
-For completeness sake, we also provide ordering relations between  \cpp{expected<E,T>} and  \cpp{unexpected_type<E>}, even though we see no practical use case for them:
-
-\begin{lstlisting}
-bool test(expected<unsigned, int> e)
-{
-  assert (e >= make_unexpected(1));    
-  assert (!(e < make_unexpected(1)));  
-  assert (make_unexpected(1) <= e);    
-  return (e > make_unexpected(1));     
-}
-\end{lstlisting}
-
-There exist two ways of implementing \cpp{operator>()} for expected objects: use \cpp{T::operator>()} or use \cpp{expected<E,T>::operator<()}
-
-In case \cpp{T::operator>} and \cpp{T::operator<} are defined consistently, both above implementations are equivalent. If the two operators are not consistent, the choice of implementation makes a difference. 
-
-For relational operations, we choose to implement all in terms of  \cpp{expected<E,T>::operator<()} to be consistent with the choice taken for \cpp{std::optional}.
-
-The same applies to the relational operators for \cpp{unexpected_type<E>} .
+The relational operators have the same semantics than \cpp{optional}\cite{OptionalRev5}. Of course, the error type can be anything but it'll never participate in ordering, thus we can consider than \cpp{E == nullopt_t}; hence the semantics of optional can be exactly mapped. We considered that we can compare \cpp{unexpected_type} but it seems that errors are not structure that have a semantic ordering. Therefore it is coherent to use the same semantics than \cpp{optional}.
 
 \subsection{Modifiers}
 %%%%%%%%%%%%%%%%%%
@@ -1098,7 +883,8 @@ The proposed interface for expected values does not contain IO operations: \cpp{
 \subsubsection{Function \cpp{make_expected}}
 %%%%%%%%%%%%%%%%%%
 
-\subsection{Monad-like operations}
+\subsection{Monadic operations}
+\label{monadic-operations}
 %%%%%%%%%%
 
 \cite{ImprovementsAsync} propose some improvements to \cpp{std::future<T>} that can be adapted to \cpp{expected<E,T>} naturally.
