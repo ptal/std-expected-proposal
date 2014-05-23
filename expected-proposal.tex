@@ -360,6 +360,58 @@ expected<error_condition, int> divide3(int i, int j)
 
 An advantage of this version is to be coherent with the \cpp{bind} and \cpp{map} functions. It also provides a more uniform way to analyze error and recover from some of these. Finally, it encourages the user to code its own ``error-resolver'' function and leads to a code with distinct treatment layers.
 
+\subsection{A Configurable Expected}
+
+Expected is configurable through the trait \cpp{expected_traits}. The first variation point is the behavior of \cpp{value()} when \cpp{expected<E,T} contains an error. A default strategy would throw a \cpp{bad_expected_access} exception but it might not be satisfiable for every error types. For example, some might want to encapsulate an \cpp{error_condition} into a specific exception. In debug mode, they might want to use an \cpp{assert} call.
+
+The other variation point is the behavior triggered when the continuation argument of \cpp{bind} or \cpp{map} throws an exception. If the exception thrown is \cpp{system_error} and error type of Expected is \cpp{error_code}, we might want to simply store the contained error. Without more discussion, let's show how to customize \cpp{expected<E, T>}, consider the following exception-oriented function:
+
+\begin{lstlisting}
+class error_cond : public std::exception {
+  // Implementation similar to system_error but for error_condition here.
+};
+
+int safe_divide(int i, int j)
+{
+  if (j == 0) 
+    throw error_cond(error_condition(arithmetic_errc::divide_by_zero));
+  return i/j;
+}
+\end{lstlisting}
+
+Imagine \cpp{j} encapsulated into an \cpp{expected}, you will call \cpp{map} with \cpp{safe_divide} as the continuation. Let's see what it looks like:
+
+\begin{lstlisting}
+expected<error_condition, int> f(int i, const expected<error_condition, int>& j)
+{
+  return j.map(bind(safe_divide, i, _1));
+}
+\end{lstlisting}
+
+If we specialize \cpp{expected_traits} for \cpp{error_condition}, we can achieve the expected behavior:
+
+\begin{lstlisting}
+template <class T>
+struct expected_traits<expected<error_condition, T>>
+{
+  static expected<error_condition, T> catch_exception()
+  {
+    try{
+      rethrow_exception(current_exception());
+    } catch(const error_cond& e) {
+      return make_unexpected(e.code());
+    }
+  }
+
+  static void bad_access(const error_type &e)
+  {
+    throw error_cond(e);
+  }
+};
+\end{lstlisting}
+
+The semantics of \cpp{catch_exception} is to rethrow the current exception and catch only the exceptions we are interest in. The default behavior let flight the exception thrown by the continuation. We created a bridge between an \cpp{error_condition} and the \cpp{error_cond} exception. More insight on link between Expected and exceptions in the section \ref{expected-traits-rational}.
+
 \section{Impacts on the Standard}
 %%%%%%%%%%%%%%%%%
 
@@ -1085,6 +1137,9 @@ eo = std::move(tmp);
 The following is an even more compelling reason. In this proposal \cpp{expected<int,int>} is allowed to be implemented as a TriviallyCopyable type. Therefore, the copy constructor of type \cpp{std::array<expected<int,int>, 1000>} can be implemented using \cpp{memcpy}. With the additional requirement that expected's move constructor should not be trivial, we would be preventing the described optimization.
 
 The fact that the moved-from expected is not invalid may look "uncomfortable" at first, but this is an invalid expectation. The requirements of library components expressed in 17.6.5.15 (moved-from state of library types) only require that moved-from objects are in a valid but unspecified state. We do not need to guarantee anything above this minimum.
+
+\subsection{Expected traits}
+\label{expected-traits-rational}
 
 \subsection{Other}
 
