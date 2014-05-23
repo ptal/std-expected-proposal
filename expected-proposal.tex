@@ -420,7 +420,7 @@ These changes are entirely based on library extensions and do not require any la
 \section{Design rationale}
 %%%%%%%%%%%%%
 
-The same rationale described in \cite{OptionalRev4} for \cpp{optional<T>} applies to \cpp{expected<E,T>} and \cpp{expected< nullopt_t, T>} should behave as \cpp{optional<T>}.  That is, we see \cpp{expected<E,T>} as \cpp{optional<T>} for which all the values of \cpp{E} collapse into a single value \cpp{nullopt}. In the following sections we present the specificities of the rationale in \cite{OptionalRev4} applied to  \cpp{expected<E,T>}.
+The same rationale described in \cite{OptionalRev4} for \cpp{optional<T>} applies to \cpp{expected<E,T>} and \cpp{expected<nullopt_t, T>} should behave as \cpp{optional<T>}.  That is, we see \cpp{expected<E,T>} as \cpp{optional<T>} for which all the values of \cpp{E} collapse into a single value \cpp{nullopt}. In the following sections we present the specificities of the rationale in \cite{OptionalRev4} applied to  \cpp{expected<E,T>}.
 
 \subsection{Conceptual model of \cpp{expected<E,T>}}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -447,77 +447,86 @@ ek = 1;
 
 \subsection{Initialization of \cpp{expected<E,T>}}
 %%%%%%%%%%%%%%%%%%%%%%%
+an
+In cases \cpp{T} and \cpp{E} are value semantic types capable of storing \cpp{n} and \cpp{m} distinct values respectively, \cpp{expected<E,T>} can be seen as an extended \cpp{T} capable of storing \cpp{n + m} values: these that \cpp{T} and \cpp{E} stores. Any valid initialization scheme must provide a way to put an expected object to any of these states. In addition, some \cpp{T}'s  are not \cpp{CopyConstructible} and their expected variants still should be constructible with any set of arguments that work for \cpp{T}.
 
-In cases \cpp{T} and \cpp{E} are value semantic types capable of storing \cpp{n} and \cpp{m} distinct values respectively, \cpp{expected<E,T>} can be seen as an extended \cpp{T} capable of storing \cpp{n + m} values: these that \cpp{T} and \cpp{E} stores. Any valid initialization scheme must provide a way to put an expected object to any of these states. In addition, some \cpp{T}'s  are not \cpp{CopyConstructible} and their expected variants still should constructible with any set of arguments that work for \cpp{T}. 
-
-As in \cite{OptionalRev4}, the model retained is to initialize either by providing either an already constructed \cpp{T} or a tagged \cpp{E}.
+\noindent
+As in \cite{OptionalRev4}, the model retained is to initialize either by providing an already constructed \cpp{T} or a tagged \cpp{E}. The default constructor required \cpp{E} to be default-constructible (which is more likely to happen than \cpp{T}).
 
 \begin{lstlisting}
 string s{"STR"};
 
-expected<exception_ptr,string> es{s};                    // requires Copyable<T>
-expected<exception_ptr,string> et = s;                   // requires Copyable<T>
-expected<exception_ptr,string> ev = string{"STR"};       // requires Movable<T>
+expected<error_condition,string> es{s};                    // requires Copyable<T>
+expected<error_condition,string> et = s;                   // requires Copyable<T>
+expected<error_condition,string> ev = string{"STR"};       // requires Movable<T>
 
-expected<exception_ptr,string> ew;                       // unexpected value
-expected<exception_ptr,string> ex{};                     // unexpected value
-expected<exception_ptr,string> ey = {};                  // unexpected value
-expected<exception_ptr,string> ez = expected<exception_ptr,string>{};  // unexpected value
+expected<error_condition,string> ew;                       // unexpected value
+expected<error_condition,string> ex{};                     // unexpected value
+expected<error_condition,string> ey = {};                  // unexpected value
+expected<error_condition,string> ez = expected<error_condition,string>{};  // unexpected value
 \end{lstlisting}
 
-In order to create a unexpected object a special function needs to be used: \cpp{make_unexpected}:
+\noindent
+In order to create an unexpected object, the special function \cpp{make_unexpected} needs to be used:
 
 \begin{lstlisting}
 expected<int, string> ep{make_unexpected(-1)};              // unexpected value, requires Movable<E>
-expected<int, string> eq = {make_unexpected(-1)};           // unexpected value, requires Movable<E>
+expected<int, string> eq = make_unexpected(-1);             // unexpected value, requires Movable<E>
 \end{lstlisting}
 
-As in \cite{OptionalRev4}, and in order to avoid calling move/copy constructor of \cpp{T}, we use a 'tagged' placement constructor: 
+\noindent
+As in \cite{OptionalRev4}, and in order to avoid calling move/copy constructor of \cpp{T}, we use a ``tagged'' placement constructor: 
 
 \begin{lstlisting}
-expected<exception_ptr,MoveOnly> eg;                        // unexpected value
-expected<exception_ptr,MoveOnly> eh{};                      // unexpected value
-expected<exception_ptr,MoveOnly> ei{in_place};               // calls MoveOnly{} in place
-expected<exception_ptr,MoveOnly> ej{in_place, "arg"};        // calls MoveOnly{"arg"} in place
+expected<error_condition,MoveOnly> eg;                        // unexpected value
+expected<error_condition,MoveOnly> eh{};                      // unexpected value
+expected<error_condition,MoveOnly> ei{in_place};              // calls MoveOnly{} in place
+expected<error_condition,MoveOnly> ej{in_place, "arg"};       // calls MoveOnly{"arg"} in place
 \end{lstlisting}
 
-To avoid calling move/copy constructor of \cpp{E}, we use a 'tagged' placement constructor: 
+\noindent
+To avoid calling move/copy constructor of \cpp{E}, we use a ``tagged'' placement constructor: 
 
 \begin{lstlisting}
 expected<string,int> ei{unexpect};               // unexpected value, calls string{} in place
 expected<string,int> ej{unexpect, "arg"};        // unexpected value, calls string{"arg"} in place
 \end{lstlisting}
 
-An alternative name for \cpp{in_place} that is coherent with the \cpp{unexpect} could be \cpp{expect}. Been compatible with \cpp{optional<T>} seems more important. So this proposal doesn't propose such a \cpp{expect} tag.
+\noindent
+An alternative name for \cpp{in_place} that is coherent with \cpp{unexpect} could be \cpp{expect}. Being compatible with \cpp{optional<T>} seems more important. So this proposal doesn't propose such a \cpp{expect} tag.
+\newline
 
-The alternative and also comprehensive initialization approach, which is not compatible with the choice to default construct \cpp{expected<E,T>} to \cpp{E()}, could be to have a variadic perfect forwarding constructor that just forwards any set of arguments to the constructor of the contained object of type \cpp{T}. 
- 
-\subsection{Almost Never-empty guaranty}
+The alternative and also comprehensive initialization approach, which is not compatible with the default construction of \cpp{expected<E,T>} to \cpp{E()}, could have been a variadic perfect forwarding constructor that just forwards any set of arguments to the constructor of the contained object of type \cpp{T}. 
+
+\subsection{Almost never-empty guaranty}
 %%%%%%%%%%%%%%%%%%
 
-As \cpp{boost::variant<unexpected_type<E>,T}, \cpp{expected<E,T>} ensures that it is never empty.
-All instances \cpp{v} of type \cpp{expected<E,T>} guarantee that \cpp{v} has constructed content of one of the types \cpp{T} or \cpp{E}, even if an operation on \cpp{v} has previously failed.
+As \cpp{boost::variant<unexpected_type<E>,T>}, \cpp{expected<E,T>} ensures that it is never empty. All instances \cpp{v} of type \cpp{expected<E,T>} guarantee that \cpp{v} has constructed content of one of the types \cpp{T} or \cpp{E}, even if an operation on \cpp{v} has previously failed.
 
-This implies that expected may be viewed precisely as a union of exactly its bounded types. This "never-empty" property insulates the user from the possibility of undefined expected content and the significant additional complexity-of-use attendant with such a possibility.
+This implies that expected may be viewed precisely as a union of exactly its bounded types. This ``never-empty'' property insulates the user from the possibility of undefined expected content and the significant additional complexity-of-use attendant with such a possibility.
 
 \subsubsection{The default constructor}
 %%%%%%%%%%%%%%%%%%
 
+Similar data structure includes \cpp{optional<T>}, \lstinline[mathescape]{variant<$T_1$,...,$T_n$>} and \cpp{future<T>}. We can compare how they are default constructed.
 \begin{itemize}
 \item \cpp{std::experimental::optional<T>} default constructs to an optional with no value. 
-\item \cpp{boost::variant<T,E>} default constructs to a variant with the value \cpp{T()} it \cpp{T} is default constructible or to the value \cpp{E()} it \cpp{E} is default constructible or it is ill formed otherwise. 
+\item \lstinline[mathescape]{boost::variant<$T_1$,...,$T_n$>} default constructs to the first type default constructible or it is ill-formed if none are default constructible.
 \item \cpp{std::future<T>} default constructs to an invalid future with no shared state associated, that is, no value and no exception.
 \item \cpp{std::experimental::optional<T>} default constructor is equivalent to \cpp{boost::variant<nullopt_t, T>}.
 \end{itemize}
 
+\noindent
+It raises several questions about \cpp{expected<E,T>}:
+
 \begin{itemize}
-\item Should the default constructor of \cpp{std::experimental::expected<E,T>} behave like \cpp{boost::variant<T,E>} or as \cpp{boost::variant<E,T>}?
-\item Should the default constructor of \cpp{std::experimental::expected<E,T>} behave like \cpp{std::experimental::optional<boost::variant<T,E>>}?
-\item Should the default constructor of \cpp{std::experimental::expected<nullopt_t,T>} behave like \cpp{std::experimental::optional<T>}? If yes, how should behave the default constructor of \cpp{std::experimental::expected<E,T>}? as if initialized with \cpp{make_unexpected(E())}? This will be equivalent to the initialization of \cpp{boost::variant<E,T>}.
-\item Should \cpp{std::experimental::expected<E,T>} provide a default constructor at all? \cite{OptionalRev3} present valid arguments against this approach, e.g. \cpp{array<optional<T>>} would not be possible. 
+\item Should the default constructor of \cpp{expected<E,T>} behave like \cpp{variant<T,E>} or as \cpp{variant<E,T>}?
+\item Should the default constructor of \cpp{expected<E,T>} behave like \cpp{optional<variant<T,E>>}?
+\item Should the default constructor of \cpp{expected<nullopt_t,T>} behave like \cpp{optional<T>}? If yes, how should behave the default constructor of \cpp{expected<E,T>}? As if initialized with \cpp{make_unexpected(E())}? This would be equivalent to the initialization of \cpp{variant<E,T>}.
+\item Should \cpp{expected<E,T>} provide a default constructor at all? \cite{OptionalRev3} presents valid arguments against this approach, e.g. \cpp{array<expected<E,T>>} would not be possible. 
 \end{itemize}
 
-Requiring \cpp{E} to be default constructible seems less constraining than requiring \cpp{T} to be default constructible. E.g. consider the \cpp{Date} example in \cite{OptionalRev3}. With the same semantics \cpp{expected<E,Date>} would be \cpp{Regular} with a meaningful not-a-date state created by default.
+Requiring \cpp{E} to be default constructible seems less constraining than requiring \cpp{T} to be default constructible (e.g. consider the \cpp{Date} example in \cite{OptionalRev3}). With the same semantics \cpp{expected<E,Date>} would be \cpp{Regular} with a meaningful not-a-date state created by default.
 
 There is still a minor issue as the default constructor of \cpp{std::exception_ptr} doesn't contains an exception and so getting the value of a default constructed \cpp{expected<exception_ptr, T>} would need to check if the stored \cpp{std::exception_ptr} is equal to \cpp{std::exception_ptr()} and throw a specific exception.
 
@@ -529,39 +538,37 @@ The authors consider the arguments in  \cite{OptionalRev3} valid and so propose 
 An object of type \cpp{T} is convertible to an expected object of type \cpp{expected<E,T>}:
 
 \begin{lstlisting}
-expected<exception_ptr,int> ei = 1; // works
+expected<error_condition, int> ei = 1; // works
 \end{lstlisting}
-
+\noindent
 This convenience feature is not strictly necessary because you can achieve the same effect by using tagged forwarding constructor:
 
 \begin{lstlisting}
-expected<exception_ptr,int> ei{in_place, 1};
+expected<error_condition, int> ei{in_place, 1};
 \end{lstlisting}
-
-If the latter appears too inconvenient, one can always use function \cpp{make_expected} described below:
+\noindent
+If the latter appears too cumbersome, one can always use function \cpp{make_expected} described below:
 
 \begin{lstlisting}
-expected<exception_ptr,int> ei = make_expected(1); 
+expected<error_condition, int> ei = make_expected(1); 
 auto ej = make_expected(1); 
 \end{lstlisting}
 
-\subsubsection{Using \cpp{make_unexpected} to convert from \cpp{E}}
+\subsubsection{Conversion from \cpp{E}}
 %%%%%%%%%%%%%%%%%%
 
-An object of type \cpp{E} is not convertible to an unexpected object of type \cpp{expected<E,T>}:
-
-The proposed interface uses a special tag \cpp{unexpect} and a special non-member \cpp{make_unexpected} function to indicate an unexpected state for \cpp{expected<E,T>}. It is used for construction and assignment. This might rise a couple of objections. First, this duplication is not strictly necessary because you can achieve the same effect by using the \cpp{unexpect} tagged forwarding constructor:
+An object of type \cpp{E} is not convertible to an unexpected object of type \cpp{expected<E,T>} since \cpp{E} and \cpp{T} can be of the same type. The proposed interface uses a special tag \cpp{unexpect} and a special non-member \cpp{make_unexpected} function to indicate an unexpected state for \cpp{expected<E,T>}. It is used for construction and assignment. This might rise a couple of objections. First, this duplication is not strictly necessary because you can achieve the same effect by using the \cpp{unexpect} tagged forwarding constructor:
 
 \begin{lstlisting}
 expected<int, string> exp1 = make_unexpected(1); 
 expected<int, string> exp2 = {unexpect, 1}; 
 
-exp1 =   make_unexpected(1);
-exp2 =  {unexpect, 1};
+exp1 = make_unexpected(1);
+exp2 = {unexpect, 1};
 
 \end{lstlisting}
-
-While some situations would work with {unexpect, ...} syntax, using \cpp{make_expected} makes the programmer's intention as clear and less cryptic. Compare these:
+\noindent
+While some situations would work with the \cpp{\{unexpect, ...\}} syntax, using \cpp{make_unexpected} makes the programmer's intention as clear and less cryptic. Compare these:
 
 \begin{lstlisting}
 expected<int, vector<int>> get1() {
@@ -577,73 +584,12 @@ expected<int, vector<int>> get3() {
 }
 \end{lstlisting}
 
-The usage of \cpp{make_unexpected} is also a consequence of the adapted model for expected: a discriminated union of \cpp{T} and \cpp{unexpected_type<E>}. 
-While \cpp{make_unexpected(E)} has been chosen because it clearly indicates that we are interested in creating an unexpected \cpp{expected<E,T>} (of unspecified type \cpp{T}), it could be used also to make a ready future with a specific exception, but this is outside the scope of this proposal.
-
-Note also that the definition of the result type of \cpp{make_unexpected} has explicitly deleted default constructor. This is in order to enable the reset idiom 
-
-\begin{lstlisting}
-exp2 = {};
-\end{lstlisting}
-
-which would otherwise not work because of ambiguity when deducing the right-hand side argument.
-
-\subsubsection{Why not a \cpp{make_unexpected} nested function on \cpp{expected<E,T>}?}
-%%%%%%%%%%%%%%%%%%
-
-\cite{AlexandrescuExpected} \cpp{Expected<T>} class has a nested member function \cpp{Expected<T>::from_error(E)} instead of the free function \cpp{make_unexpected}. But the proposed \cpp{expected<E,T>} has an additional template parameter \cpp{E} and so the type \cpp{E} would be explicit.
-
-\begin{lstlisting}
-expected<unsigned, string> ei = expected<unsigned, string>::make_unexpected(1);
-\end{lstlisting}
-
-This has however several advantages. Namespace \cpp{std} is not polluted with an additional expected-specific name. Also, it resolves certain ambiguities when types like expected<E, expected<E,T>> are involved:
-
-\begin{lstlisting}
-expected<int, expected<int, string>> eei = 
-    expected<int, string>::make_unexpected(1);           // valued
-expected<int, expected<int, string>> eej = 
-    expected<int, expected<int, string>>::make_unexpected(1); // disengaged
-
-void fun(expected<int, string>);
-void fun(expected<int, int>);
-
-fun(expected<int, string>::make_unexpected(1)); // unambiguous: a typeless make_unexpected would not do 
-\end{lstlisting}
-
-Yet, we choose to propose a free function because we consider the above problems rare and a free function offers a very short notation in other cases:
-
-\begin{lstlisting}
-expected<int, string> fun()
-{
-  expected<int, string> ei = make_unexpected(1);  // no ambiguity
-  ei = make_unexpected(1);                // no ambiguity
-  // ...
-  return make_unexpected(1);              // no ambiguity
-}
-\end{lstlisting}
-
-If the typeless function does not work for you, you can always use the following construct, although at the expense of invoking a (possibly elided) move constructor:
-
-\begin{lstlisting}
-expected<int, expected<int, string>> eei = 
-    expected<int, string>{make_unexpected(1)};           // valued
-expected<int, expected<int, string>> eej = 
-    expected<int, expected<int, string>>{make_unexpected(1)}; // unexpected
-
-void fun(expected<int, string>);
-void fun(expected<int,int>);
-
-fun(expected<int, string>{make_unexpected(1)}); // unambiguous 
-\end{lstlisting}
-
-\subsubsection{Handling \cpp{initializer_list}}
-%%%%%%%%%%%%%%%%%%
+The usage of \cpp{make_unexpected} is also a consequence of the adapted model for expected: a discriminated union of \cpp{T} and \cpp{unexpected_type<E>}. While \cpp{make_unexpected(E)} has been chosen because it clearly indicates that we are interested in creating an unexpected \cpp{expected<E,T>} (of unspecified type \cpp{T}), it could be also used to make a ready future with a specific error, but this is outside the scope of this proposal. Note also that the definition of the result type of \cpp{make_unexpected} has an explicitly deleted default constructor. This is in order to enable the reset idiom \cpp{exp2 = \{\}} which would otherwise not work due to the ambiguity when deducing the right-hand side argument.
 
 \subsection{Observers}
 %%%%%%%%%%%%%%%%%%
 
-In order to be as efficient as possible, this proposal includes observers with narrow and wide contracts. Thus, the \cpp{value()} function has a wide contract. If the expected object doesn't contains a value an exception is throw. However, when the user know that the expected object is valid, the use of \cpp{operator*} would be more appropriated. 
+In order to be as efficient as possible, this proposal includes observers with narrow and wide contracts. Thus, the \cpp{value()} function has a wide contract. If the expected object doesn't contains a value an exception is thrown. However, when the user know that the expected object is valid, the use of \cpp{operator*} would be more appropriated. 
 
 \subsubsection{Explicit conversion to \cpp{bool}}
 %%%%%%%%%%%%%%%%%%
