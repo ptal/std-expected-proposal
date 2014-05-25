@@ -716,83 +716,46 @@ The relational operators have the same semantics than \cpp{optional}\cite{Option
 \subsubsection{Reseting the value}
 %%%%%%%%%%%%%%%%%%
 
-Assigning the value of type \cpp{T} to \cpp{expected<E,T>} object results in doing two different things based on whether the expected object has a value or not. If expected object has a value, the contained value is assigned a new value. If expected object has an unexpected value, the destructor of the unexpected value is called and then it becomes valued using \cpp{T}'s copy/move constructor. This behavior is based on a silent assumption that \cpp{T}'s copy/move constructor is copying a value in a similar way to copy/move assignment. A similar logic applies to \cpp{expected<E,T>}'s copy/move assignment, although the situation here is more complicated because we have two valued/unexpected states to be considered. This means that \cpp{expected<E,T>}'s assignment does not work (does not compile) if \cpp{T} is not assignable:
-
-\begin{lstlisting}
-expected<int,const int> ei = 1;  // ok
-ei = 2;                          // error 
-ei = ei;                         // error 
-ei = make_unexpected(1);         // ok
-\end{lstlisting}
-
-There is an option to reset the value of optional object without resorting to \cpp{T}'s assignment:
-
-\begin{lstlisting}
-expected<int, const int> ej = 1;  // ok
-ej.emplace(2);                    // ok 
-\end{lstlisting}
-
-Function emplace disengages the optional object if it is engaged, and then just engages the object anew by copy-constructing the contained value. It is similar to assignment, except that it is guaranteed not to use T's assignment and provides only a basic exception safety guarantee. In contrast, assignment may provide a stronger guarantee if T's assignment does.
-
-To sumarize, this proposal offers three ways of assigning a new contained value to an optional object:
-
-\begin{lstlisting}
-optional<int> e;
-e = make_optional(1);   // copy/move assignment
-e = 1;                  // assignment from T
-e.emplace(1);           // emplacement 
-\end{lstlisting}
-
-The first form of assignment is required to make optional a regular object, useable in STL. We need the second form in order to reflect the fact that optional<T> is a wrapper for T and hence it should behave as T as much as possible. Also, when optional<T> is viewed as T with one additional value, we want the values of T to be directly assignable to optional<T>. In addition, we need the second form to allow the interoperability with function std::tie as shown above. The third option is required to be able to reset an optional non-assignable T.
+Reseting the value of \cpp{expected<E,T>} is similar to \cpp{optional<T>} but instead of building a disengaged \cpp{optional<T>}, we build a erroneous \cpp{expected<E,T>}. Hence, the semantics and rational is the same than in \cite{OptionalRev4}.
 
 \subsubsection{Tag \cpp{in_place}}
 %%%%%%%%%%%%%%%%%%
 
-This proposal makes use of the 'in-place' tag defined in \cite{OptionalRev5}. This proposal  provides the same kind of 'in-place' constructor that forwards (perfectly) the arguments provided to \cpp{expected}'s constructor into the constructor of \cpp{T}. In order to trigger this constructor one has to use the tag struct \cpp{in_place}. We need the extra tag to disambiguate certain situations, like calling \cpp{expected}'s default constructor and requesting \cpp{T}'s default construction:
+This proposal makes use of the "in-place" tag defined in \cite{OptionalRev5}. This proposal  provides the same kind of "in-place" constructor that forwards (perfectly) the arguments provided to \cpp{expected}'s constructor into the constructor of \cpp{T}. In order to trigger this constructor one has to use the tag struct \cpp{in_place}. We need the extra tag to disambiguate certain situations, like calling \cpp{expected}'s default constructor and requesting \cpp{T}'s default construction:
 
 \begin{lstlisting}
-expected<int,Big> eb{in_place, "1"}; // calls Big{"1"} in place (no moving)
-expected<int,Big> ec{in_place};      // calls Big{} in place (no moving)
-expected<int,Big> ed{};              // creates a unexpected expected
+expected<error, Big> eb{in_place, "1"}; // calls Big{"1"} in place (no moving)
+expected<error, Big> ec{in_place};      // calls Big{} in place (no moving)
+expected<error, Big> ed{};              // calls error{} (unexpected state)
 \end{lstlisting}
 
 
 \subsubsection{Tag \cpp{unexpect}}
 %%%%%%%%%%%%%%%%%%
 
-This proposal provides an 'unpect' constructor that forwards (perfectly) the arguments provided to \cpp{expected}'s constructor into the constructor of \cpp{E}. In order to trigger this constructor one has to use the tag struct \cpp{unexpect}. We need the extra tag to disambiguate certain situations, like calling \cpp{expected}'s default constructor and requesting \cpp{T}'s default construction:
+This proposal provides an "unexpect" constructor that forwards (perfectly) the arguments provided to \cpp{expected}'s constructor into the constructor of \cpp{E}. In order to trigger this constructor one has to use the tag struct \cpp{unexpect}. We need the extra tag to disambiguate certain situations, notably if \cpp{T == E}.
 
 \begin{lstlisting}
-expected<int, Big> eb{unexpect, "1"}; // calls Big{"1"} in place (no moving)
-expected<int, Big> ec{unexpect};      // calls Big{} in place (no moving)
+expected<error, Big> eb{unexpect, "1"}; // calls error{"1"} in place (no moving)
+expected<error, Big> ec{unexpect};      // calls error{} in place (no moving)
 \end{lstlisting}
 
-In order to make the tag uniform an additional 'expect' constructor could be provided but this proposal doesn't propose it.
-
-\subsubsection{Requirements}
-
-The \cpp{expected<std::exception_ptr,T>} specialization introduces some operations as \cpp{has_exception} and \cpp{catch_exception}. Should we name the classes differently? For example, \cpp{exception_or<T>} and \cpp{error_or<E,T>}.
+In order to make the tag uniform an additional "expect" constructor could be provided but this proposal doesn't propose it.
 
 \subsubsection{Requirements on \cpp{T} and \cpp{E}}
 %%%%%%%%%%%%%%%%%%
 
-Class template \cpp{expected} imposes little requirements on \cpp{T} and \cpp{E}: they have to be  complete object type satisfying the requirements of \cpp{Destructible}. It is the particular operations on \cpp{expected<E,T>} that impose requirements on \cpp{T} and \cpp{E}: \cpp{expected<E,T>}'s move constructor requires that \cpp{T} and \cpp{E} are \cpp{MoveConstructible}, \cpp{expected<E,T>}'s copy constructor requires that \cpp{T} and \cpp{E} are \cpp{CopyConstructible}, and so on. This is because \cpp{expected<E,T>} is a wrapper for \cpp{T} or \cpp{E}: it should resemble \cpp{T} as much as possible. If \cpp{T} is \cpp{EqualityComparable} then (and only then) we expect \cpp{expected<E,T>} to be \cpp{EqualityComparable}. 
-
+Class template \cpp{expected} imposes little requirements on \cpp{T} and \cpp{E}: they have to be  complete object type satisfying the requirements of \cpp{Destructible}. Each operations on \cpp{expected<E,T>} have different requirements and may be disable if \cpp{T} or \cpp{E} doesn't respect these requirements. For example, \cpp{expected<E,T>}'s move constructor requires that \cpp{T} and \cpp{E} are \cpp{MoveConstructible}, \cpp{expected<E,T>}'s copy constructor requires that \cpp{T} and \cpp{E} are \cpp{CopyConstructible}, and so on. This is because \cpp{expected<E,T>} is a wrapper for \cpp{T} or \cpp{E}: it should resemble \cpp{T} as much as possible. If \cpp{T} is \cpp{EqualityComparable} then (and only then) we expect \cpp{expected<E,T>} to be \cpp{EqualityComparable}. 
 
 \subsubsection{Expected references}
 %%%%%%%%%%%%%%%%%%
 
-This proposal doesn't include expected references as \cite{optional} doesn't  includes optional references neither.
+This proposal doesn't include expected references as \cpp{optional}\cite{OptionalRev5} doesn't include references neither.
 
 \subsubsection{Expected void}
 %%%%%%%%%%%%%%%%%%
 
-While it could seem weird to instantiate optional with \cpp{void}, it has more sense for expected as expected conveys in addition, as \cpp{future<T>},  an error code, \cpp{expected<E,void>}.
-
-\subsubsection{\cpp{NullableProxy}}
-%%%%%%%%%%%%%%%%%%
-
-As optional objects, the primary purpose of expected object is to check if they contain a value and if so, to provide access to this value.  \cpp{expected<E,T>} could be seen also as a \cpp{NullableProxy}.  
+While it could seem weird to instantiate optional with \cpp{void}, it has more sense for expected as it conveys in addition, as \cpp{future<T>}, an error state.
 
 \subsection{Literals}
 
