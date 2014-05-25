@@ -872,9 +872,9 @@ We could add such a function to the standard, either as a free function or as a 
 \subsection{Variant}
 %%%%%%%%%%%%%%%%%%%%
 
-\cpp{expected<E,T>} can be seen as a specialization of  \cpp{boost::variant<unexpected<E>,T>} which gives a specific intent to its second parameter, that is, it represent the type of the expected contained value. This specificity allows to provide a pointer like interface, as it is the case for \cpp{std::experimental::optional<T>}. Even if the standard included a class  \cpp{variant<T,E>}, the interface provided by \cpp{expected<E,T>} is more specific and closer to what the user could expect as the result type of a function. In addition, \cpp{expected<E,T>} doesn't intend to be used to define recursive data as \cpp{boost::variant<>} does.
+\cpp{expected<E,T>} can be seen as a specialization of  \cpp{boost::variant<unexpected<E>,T>} which gives a specific intent to its second parameter, that is, it represents the type of the expected contained value. This specificity allows to provide a pointer like interface, as it is the case for \cpp{std::experimental::optional<T>}. Even if the standard included a class  \cpp{variant<T,E>}, the interface provided by \cpp{expected<E,T>} is more specific and closer to what the user could expect as the result type of a function. In addition, \cpp{expected<E,T>} doesn't intend to be used to define recursive data as \cpp{boost::variant<>} does.
 
-The table \ref{comp-variant} presents a brief comparison between \cpp{boost::variant<T, E>} and \cpp{expected<E,T>}.
+The table \ref{comp-variant} presents a brief comparison between \cpp{boost::variant<unexpected<E>, T>} and \cpp{expected<E,T>}.
 
 \begin{table}[h!]
 \bgroup
@@ -898,9 +898,9 @@ The table \ref{comp-variant} presents a brief comparison between \cpp{boost::var
 \hline
 \textbf{default constructor} & yes (if T is default constructible) & yes (if T is default constructible)  \\
 \hline
-\textbf{observers} & boost::get<T> and boost::get<E> & pointer-like / value / error / value_or / value_or_throw \\
+\textbf{observers} & boost::get<T> and boost::get<E> & pointer-like / value / error / value_or \\
 \hline
-\textbf{continuations} & apply_visitor & then/bind/catch_error  \\
+\textbf{continuations} & apply_visitor & map/bind/then/catch_error  \\
 \hline
 \end{tabular}
 \egroup
@@ -912,9 +912,7 @@ The table \ref{comp-variant} presents a brief comparison between \cpp{boost::var
 \subsection{Optional}
 %%%%%%%%%%%
 
-We can see \cpp{expected<E,T>} as an \cpp{std::experimental::optional<T>} that collapse all the values of \cpp{E} to \cpp{nullopt}. 
-
-We can convert an \cpp{expected<E,T>} to an \cpp{optional<T>} with the possible loss of information.
+We can see \cpp{expected<E,T>} as an \cpp{std::experimental::optional<T>} that collapse all the values of \cpp{E} to \cpp{nullopt}. We can convert an \cpp{expected<E,T>} to an \cpp{optional<T>} with the possible loss of information.
 
 \begin{lstlisting}
 template <class T>
@@ -923,22 +921,21 @@ optional<T> make_optional(expected<E,T> v) {
   else nullopt;
 }
 \end{lstlisting}
-
-We can convert an \cpp{optional<T>} to an \cpp{expected<exception_ptr,T>} without knowledge of the root cause.
+\noindent
+We can convert an \cpp{optional<T>} to an \cpp{expected<E,T>} without knowledge of the root cause. We consider that \cpp{E()} is equal to \cpp{nullopt} since it shouldn't bring more informations (however it depends on the underlying error --- we considered \cpp{exception_ptr} and \cpp{error_condition}).
 
 \begin{lstlisting}
-template <class T>
-expected<exception_ptr,T> make_expected(optional<T> v) {
+template <class T, class E>
+expected<E,T> make_expected(optional<T> v) {
   if (v) return make_expected(*v);
-  else make_unexpected(conversion_from_nullopt());
+  else make_unexpected(E());
 }
 \end{lstlisting}
 
 \subsection{Promise and Future}
 %%%%%%%%%%%%%%%%%
 
-We can see \cpp{expected<exception_ptr,T>} as a always ready \cpp{future<T>}.
-While \cpp{promise<>}/\cpp{future<>} focuses on inter-thread asynchronous communication, \cpp{excepted<E,T>} focus on eager and synchronous computations.
+We can see \cpp{expected<exception_ptr,T>} as an always ready \cpp{future<T>}. While \cpp{promise<>}/\cpp{future<>} focuses on inter-thread asynchronous communication, \cpp{excepted<E,T>} focus on eager and synchronous computations.
 We can move a ready \cpp{future<T>} to an \cpp{expected<exception_ptr,T>} with no loss of information. 
 
 \begin{lstlisting}
@@ -952,8 +949,8 @@ expected<exception_ptr,T> make_expected(future<T>&& f) {
   }
 }
 \end{lstlisting}
-
-We can create also a \cpp{future<T>} from an \cpp{expected<exception_ptr,T>}.
+\noindent
+We can also create a \cpp{future<T>} from an \cpp{expected<exception_ptr,T>}.
 
 \begin{lstlisting}
 template <class T>
@@ -964,8 +961,8 @@ future<T> make_ready_future(expected<exception_ptr,T> e) {
     return make_unexpected_future<T>(e.error()); 
 }
 \end{lstlisting}
-
-where
+\noindent
+where \cpp{make_unexpected_future} is defined as:
 
 \begin{lstlisting}
 template <class T, class E>
@@ -976,8 +973,8 @@ constexpr future<T> make_unexpected_future(E e)  {
   return move(f);
 }
 \end{lstlisting}
-
-We can combine them as follows
+\noindent
+We can combine them as follows:
 
 \begin{lstlisting}
 fut.then([](future<int> f) { 
@@ -986,14 +983,11 @@ fut.then([](future<int> f) {
   });
 \end{lstlisting}
 
-\subsection{Expected monad}
-%%%%%%%%%%%%%%%
-
 As for the \cpp{future<T>} proposal, \cpp{expected<E,T>} provides also a way to visit the stored values.
 \cpp{future<T>} provides a \cpp{then()} function that accepts a continuation having the \cpp{future<T>} as parameter. The synchronous nature of expected makes it easier to use two functions, one to manage with the case expected has a value and one to try to recover otherwise. This is more in line with the monad interface, as any function having a \cpp{T} as parameter can be used as parameter of the apply function, no need to have a \cpp{expected<E,T>}. This make it easier to reuse functions. 
 
 \begin{itemize}
- \item \cpp{expected<E,T>::bind()}/\cpp{expected<E,T>::catch_error()} are the counterpart of \cpp{future<T>.then()}
+ \item \cpp{expected<E,T>::then()} is the counterpart of \cpp{future<T>.then()}
  \item \cpp{expected<E,T>::unwrap()} is the counterpart of \cpp{future<T>.unwrap()}
  \item \cpp{expected<E,T>::operator bool()} is the counterpart of \cpp{future<T>.has_value()}
 \end{itemize}
@@ -1029,15 +1023,13 @@ The table \ref{comp-monads} presents a brief comparison between \cpp{optional<T>
 \hline
 \textbf{bool conversion} & yes & yes & no \\
 \hline
-\textbf{state} & bool()  &  bool() & valid / ready / (has_value, see \cite{MoreAsync}) \\
+\textbf{state} & bool()  &  bool() / valid & valid / ready / (has_value, see \cite{MoreAsync}) \\
 \hline
 \textbf{observers} & pointer-like / value / value_or & pointer-like / value / error / value_or / value_or_throw & get / (get_exception_ptr, see \cite{MoreAsync}) \\
 \hline
-\textbf{visitation} & no & then/bind/catch_error  & then / (next/recover see \cite{MoreAsync}) \\
+\textbf{visitation} & no & map / bind / then / catch_error  & then / (next/recover see \cite{MoreAsync}) \\
 \hline
 \textbf{grouping} & n/a & n/a & when_all / when_any \\
-\hline
-\textbf{apply} & no & bind & no \\
 \hline
 \end{tabular}
 \egroup
