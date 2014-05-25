@@ -1311,7 +1311,7 @@ auto e  = expected_tc<error_condition>::make(1) // result would be expected<int,
 \end{lstlisting}
 
 
-\subsection{Do we need a of \cpp{expected<E,T>::error_or} function?}
+\subsection{Do we need a  \cpp{expected<E,T>::error_or} function?}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 It has been argued that the error should be always available and that often there is a success value associated to the error.
@@ -1371,6 +1371,42 @@ E error_or(expected<E,T> const&, E err) {
 \end{lstlisting}
 
 Do we need to add such a \cpp{error_or} function? as member? 
+
+\subsection{Do we need a  \cpp{expected<E,T>::has_error} function?}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+More relevant might be exponential backoff, which would look much uglier if you had to test for whether or not there was a status.
+
+\begin{lstlisting}
+  e = function();
+  while ( e.status == timeout ) {
+    sleep(delay);
+    delay *=2;
+  }
+\end{lstlisting}
+
+Here we have a value or a hard error.  
+This use case would need to use something like \cpp{has_error}
+
+\begin{lstlisting}
+  e = function();
+  while ( has_error(e, timeout) ) {
+    sleep(delay);
+    delay *=2;
+  }
+\end{lstlisting}
+
+where
+
+\begin{lstlisting}
+template <class E, class T>
+bool has_error(expected<E,T> const&, E err) {
+  if (e) return false;
+  else return error()==err;
+}
+\end{lstlisting}
+
+Do we need to add such a \cpp{has_error} function? as member? 
 
 %%%%%%%%%%%%%%
 \section{Proposed Wording}
