@@ -394,10 +394,10 @@ If we specialize \cpp{expected_traits} for \cpp{error_condition}, we can achieve
 template <class T>
 struct expected_traits<expected<error_condition, T>>
 {
-  static expected<error_condition, T> catch_exception()
+  static expected<error_condition, T> catch_exception(exception_ptr e)
   {
     try{
-      rethrow_exception(current_exception());
+      rethrow_exception(e);
     } catch(const error_cond& e) {
       return make_unexpected(e.code());
     }
@@ -456,13 +456,13 @@ As in \cite{OptionalRev4}, the model retained is to initialize either by providi
 \begin{lstlisting}
 string s{"STR"};
 
-expected<error_condition,string> es{s};                    // requires Copyable<T>
-expected<error_condition,string> et = s;                   // requires Copyable<T>
-expected<error_condition,string> ev = string{"STR"};       // requires Movable<T>
+expected<error_condition,string> es{s};              // requires Copyable<T>
+expected<error_condition,string> et = s;             // requires Copyable<T>
+expected<error_condition,string> ev = string{"STR"}; // requires Movable<T>
 
-expected<error_condition,string> ew;                       // unexpected value
-expected<error_condition,string> ex{};                     // unexpected value
-expected<error_condition,string> ey = {};                  // unexpected value
+expected<error_condition,string> ew;                 // unexpected value
+expected<error_condition,string> ex{};               // unexpected value
+expected<error_condition,string> ey = {};            // unexpected value
 expected<error_condition,string> ez = expected<error_condition,string>{};  // unexpected value
 \end{lstlisting}
 
@@ -470,26 +470,26 @@ expected<error_condition,string> ez = expected<error_condition,string>{};  // un
 In order to create an unexpected object, the special function \cpp{make_unexpected} needs to be used:
 
 \begin{lstlisting}
-expected<int, string> ep{make_unexpected(-1)};              // unexpected value, requires Movable<E>
-expected<int, string> eq = make_unexpected(-1);             // unexpected value, requires Movable<E>
+expected<int, string> ep{make_unexpected(-1)};    // unexpected value, requires Movable<E>
+expected<int, string> eq = make_unexpected(-1);   // unexpected value, requires Movable<E>
 \end{lstlisting}
 
 \noindent
 As in \cite{OptionalRev4}, and in order to avoid calling move/copy constructor of \cpp{T}, we use a ``tagged'' placement constructor: 
 
 \begin{lstlisting}
-expected<error_condition,MoveOnly> eg;                        // unexpected value
-expected<error_condition,MoveOnly> eh{};                      // unexpected value
-expected<error_condition,MoveOnly> ei{in_place};              // calls MoveOnly{} in place
-expected<error_condition,MoveOnly> ej{in_place, "arg"};       // calls MoveOnly{"arg"} in place
+expected<error_condition,MoveOnly> eg;                  // unexpected value
+expected<error_condition,MoveOnly> eh{};                // unexpected value
+expected<error_condition,MoveOnly> ei{in_place};        // calls MoveOnly{} in place
+expected<error_condition,MoveOnly> ej{in_place, "arg"}; // calls MoveOnly{"arg"} in place
 \end{lstlisting}
 
 \noindent
 To avoid calling move/copy constructor of \cpp{E}, we use a ``tagged'' placement constructor: 
 
 \begin{lstlisting}
-expected<string,int> ei{unexpect};               // unexpected value, calls string{} in place
-expected<string,int> ej{unexpect, "arg"};        // unexpected value, calls string{"arg"} in place
+expected<string,int> ei{unexpect};         // unexpected value, calls string{} in place
+expected<string,int> ej{unexpect, "arg"};  // unexpected value, calls string{"arg"} in place
 \end{lstlisting}
 
 \noindent
@@ -624,59 +624,26 @@ Using the indirection operator for a object that doesn't contain a value is an u
 
 \subsubsection{Function value}
 %%%%%%%%%%%%%%%%%%
-\todo{Modify if we chose to use a trait, also it needs to be refreshed and we must indicate the alternative choice to retrieve the value (bind and map) which are more appropriate in many cases.}
 
-
-In addition to the indirection operator, we propose the member function value as in \cite{OptionalRev4} that returns a reference to the contained value if one exists or throws an exception otherwise:
+In addition to the indirection operator, we propose the member function value as in \cite{OptionalRev4} that returns a reference to the contained value if one exists or throw an exception otherwise.
 
 \begin{lstlisting}
 void interact() {
-  std::string s;
-  cout << "enter number ";
+  string s;
+  cout << "enter number: ";
   cin >> s;
-  expected<exception_ptr,int> ei = str2int(s);
+  expected<error,int> ei = str2int(s);
   
   try {
     process_int(ei.value());
   }
-  catch(bad_expected_access const&) {
-    cout << "this was not a number";
+  catch(bad_expected_access<error>) {
+    cout << "this was not a number.";
   }
 }
 \end{lstlisting}
 
-The exception thrown depend on the expected error type. By default it throws \cpp{bad_expected_access<E>} (derived from \cpp{logic_error}) which will contain the stored error. In the case \cpp{expected<exception_ptr>}, it thows the exception stored on the \cpp{exception_ptr}.
-
-This function can be implemented easily using the bool conversion and the dereference operator as a non member function
-
-\begin{lstlisting}
-  template <class E, class T>
-  contexpr T const& value(expected<E,T> const& e)
-  {
-    if(e) return *e;
-    else throw bad_expected_access(e.error());
-  }
-  template <class E, class T>
-  contexpr T & value(expected<E,T>& e)
-  {
-    if(e) return *e;
-    else throw bad_expected_access(e.error());
-  }
-  template <class T>
-  contexpr T const& value(expected<exception_ptr,T> const& e)
-  {
-    if(e) return *e;
-    else rethrow_exception(e.error());
-  }
-  template <class T>
-  contexpr T & value(expected<exception_ptr,T>& e)
-  {
-    if(e) return *e;
-    else rethrow_exception(e.error());
-  }
-\end{lstlisting}
-
-The advantage is the user could overload the function for other errors, as \cpp{any}, \cpp{variant<E1, ...., En>}. The liability is that free functions introduce a new name on the std namespace. Adding it to a specific namespace could solve this issue, but finding a good name is no so simple.
+The exception thrown depend on the expected error type. By default it throws \cpp{bad_expected_access<E>} (derived from \cpp{logic_error}) which will contain the stored error. In the case of \cpp{expected<exception_ptr>}, it thows the exception stored in the \cpp{exception_ptr}. This behavior is customizable by specializing \cpp{expected_traits}, for example, it is also specialized for \cpp{error_code} and throw a \cpp{system_error} if we try to access an erroneous \cpp{expected<error_code,T>}. If these specializations are undesirables, we provide a third template argument of \cpp{expected<E,T,Traits>} defaulted to \cpp{expected_traits<E,T>}, hence the user can provide its own trait.
 
 \cpp{bad_expected_access<E>} and \cpp{bad_optional_access} could inherit both from a \cpp{bad_access} exception derived from \cpp{logic_error}, but this is not proposed.
 
@@ -753,16 +720,16 @@ Assigning the value of type \cpp{T} to \cpp{expected<E,T>} object results in doi
 
 \begin{lstlisting}
 expected<int,const int> ei = 1;  // ok
-ei = 2;                      // error 
-ei = ei;                     // error 
-ei = make_unexpected(1);                // ok
+ei = 2;                          // error 
+ei = ei;                         // error 
+ei = make_unexpected(1);         // ok
 \end{lstlisting}
 
 There is an option to reset the value of optional object without resorting to \cpp{T}'s assignment:
 
 \begin{lstlisting}
 expected<int, const int> ej = 1;  // ok
-ej.emplace(2);               // ok 
+ej.emplace(2);                    // ok 
 \end{lstlisting}
 
 Function emplace disengages the optional object if it is engaged, and then just engages the object anew by copy-constructing the contained value. It is similar to assignment, except that it is guaranteed not to use T's assignment and provides only a basic exception safety guarantee. In contrast, assignment may provide a stronger guarantee if T's assignment does.
@@ -771,9 +738,9 @@ To sumarize, this proposal offers three ways of assigning a new contained value 
 
 \begin{lstlisting}
 optional<int> e;
-e = make_optional(1);         // copy/move assignment
-e = 1;                        // assignment from T
-e.emplace(1);                 // emplacement 
+e = make_optional(1);   // copy/move assignment
+e = 1;                  // assignment from T
+e.emplace(1);           // emplacement 
 \end{lstlisting}
 
 The first form of assignment is required to make optional a regular object, useable in STL. We need the second form in order to reflect the fact that optional<T> is a wrapper for T and hence it should behave as T as much as possible. Also, when optional<T> is viewed as T with one additional value, we want the values of T to be directly assignable to optional<T>. In addition, we need the second form to allow the interoperability with function std::tie as shown above. The third option is required to be able to reset an optional non-assignable T.
@@ -786,7 +753,7 @@ This proposal makes use of the 'in-place' tag defined in \cite{OptionalRev5}. Th
 \begin{lstlisting}
 expected<int,Big> eb{in_place, "1"}; // calls Big{"1"} in place (no moving)
 expected<int,Big> ec{in_place};      // calls Big{} in place (no moving)
-expected<int,Big> ed{};             // creates a unexpected expected
+expected<int,Big> ed{};              // creates a unexpected expected
 \end{lstlisting}
 
 
