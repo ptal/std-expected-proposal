@@ -1043,7 +1043,9 @@ The table \ref{comp-monads} presents a brief comparison between \cpp{optional<T>
 \subsection{Better support for monad}
 \label{better-support-for-monad}
 
-A cleaner solution uses the variadic free function \cpp{map}\footnote{\cpp{map} stands for ``functor map''.}:
+In the use-cases section (\ref{divide-example}), we present expected as a better way to handle errors than exception or error code. However the current syntax using lambda and chaining monadic operations (such as \cpp{map}) can be tedious to use. We propose different solutions to overcome this problem, since the solutions are more general than the scope of this proposal we discuss them in the open points section.
+
+A first solution that do not require change in the language is the use of variadic monadic operation. For example using a variadic free function \cpp{map}, we can write the $i/k + j/k$ function as following:
 
 \begin{lstlisting}
 expected<exception_ptr,int> f(int i, int j, int k)
@@ -1054,34 +1056,27 @@ expected<exception_ptr,int> f(int i, int j, int k)
 }
 \end{lstlisting}
 
-The function \cpp{map} returns the first erroneous expected argument or, if they all contain a value, the result of the \cpp{plus} operation.
+This is most readable than the member \cpp{map} function and the use of lambda. However it suffers from two major deficiencies:
 
+\begin{itemize}
+\item \textbf{Eager evaluation} All arguments are evaluated even if the first fails.
+\item \textbf{Unordered evaluation} We cannot control the order of evaluation thus it presupposed the function to have no side effects.
+\end{itemize}
 
-Now let's rewrite this using a possible C++ language extension: adding a DO expression like the Haskell do expression. It is something similar  to the \cpp{await} extension for futures however it is not limited to futures. It could works for any monad.   
-
-The grammar could be
+Considering these two problems we consider a possible C++ language extension: a do-notation similar to the one in Haskell. As with the variadic \cpp{map} function, it is not limited to \cpp{expected} but could work with any kind of monad. Next follow the grammar:
 
 \begin{lstlisting}
-do-expression ::= do-initialization ':' do-expression-or-expression
-
-do-expression-or-expression ::= do-expression | expression
-
+expression ::= ...
+            | do-expression
+do-expression ::= do-initialization ':' expression
 do-initialization ::= type var '<-' expression
 \end{lstlisting}
 
-The meaning of \cpp{do-expression}  is given by a transformation \cpp{[[ ]]}
+\noindent
+The previous function could be rewritten as:
 
 \begin{lstlisting}
-[[do-expression]] =
-  bind(expression,[&](type var) {
-    return [[do-expression-or-expression]]
-  });
-\end{lstlisting}
-
-The previous function could be written as
-
-\begin{lstlisting}
-expected<exception_ptr,int> f2(int i, int j, int k)
+expected<error_condition, int> f2(int i, int j, int k)
 {
   return (
     auto s1 <- safe_divide(i, k) :
@@ -1091,13 +1086,22 @@ expected<exception_ptr,int> f2(int i, int j, int k)
 }
 \end{lstlisting}
 
-resulting in the transformed C++ code
+This syntax is far easier to read and to understand. A lazy evaluation of statement is possible and the order is well-defined. Nevertheless, it can be considered as a syntactic sugar for \cpp{bind}. We give a syntactic transformation following:
 
 \begin{lstlisting}
-expected<exception_ptr,int> f2(int i, int j, int k)
+[[do-expression]] =
+  bind(expression, [&](type var) {
+    return [[do-expression-or-expression]]
+  });
+\end{lstlisting}
+\noindent
+The transformed code of the previous function is:
+
+\begin{lstlisting}
+expected<error_condition, int> f2(int i, int j, int k)
 {
-  return bind(safe_divide(i, k) ,[&r](auto s1) {
-    return bind(safe_divide(j, k),[&r](auto s2) {
+  return bind(safe_divide(i, k) ,[=](auto s1) {
+    return bind(safe_divide(j, k),[=](auto s2) {
       return s1 + s2;
     });
   }); 
@@ -1107,7 +1111,7 @@ expected<exception_ptr,int> f2(int i, int j, int k)
 This would give the exact same results as the previous version. However, the function \cpp{f2} is much simpler and clearer than \cpp{f} because it doesn't have to explicitly handle any of the error cases. When an error case occurs, it is returned as the result of the function, but if not, the correct result of a subexpression is bound to a name (\cpp{s1} or \cpp{s2}), and that result can be used in later parts of the computation. The code is a lot simpler to write. The more complicated the error-handling function, the more important this will be.
 
 But, the standard doesn't have this DO expression yet.
-Waiting for a do-statement the user could define some macros (see \cite{monad_do_poc} and define \cpp{f2} as
+Waiting for a do-statement the user could define some macros and define \cpp{f2} as
 
 \begin{lstlisting}
 expected<exception_ptr,int> f2(int i, int j, int k)
@@ -1120,21 +1124,12 @@ expected<exception_ptr,int> f2(int i, int j, int k)
 }
 \end{lstlisting}
 
-In the case of expected and optional, that is, monads that are always ready and have only one value stored, the following macro 
-
-\begin{lstlisting}
-#define EXPECT(V, EXPR) \
-auto BOOST_JOIN(expected,V) = EXPR; \
-if (! has_value(BOOST_JOIN(expected,V))) return get_unexpected(BOOST_JOIN(expected,V)); \
-auto V = deref(BOOST_JOIN(expected,V))
-\end{lstlisting}
-
-can be used to obtain the same result.
+In the case of expected and optional, and similarly to the proposed \cpp{await} keyword we could use an \cpp{expect} keyword (it returns if the expected is not valued):
 
 \begin{lstlisting}
 expected<exception_ptr,int> f2(int i, int j, int k)
 {
-  EXPECT(s1, safe_divide(i, k) );
+  EXPECT(s1, safe_divide(i, k));
   EXPECT(s2, safe_divide(j, k));
   return s1 + s2;
 }
@@ -1148,10 +1143,10 @@ Note that this meaning of EXPECT is not valid for the list monad.
 As \cpp{optional<T>},  \cpp{expected<E,T>} does not allocate memory. So it can do without allocators. However, it can be useful in compound types like:
 
 \begin{lstlisting}
-typedef vector< expected<erroc, vector<int, MyAlloc>>, MyAlloc>; MyVec;
+typedef vector<expected<error, vector<int, MyAlloc>>, MyAlloc> MyVec;
 MyVec v{ v2, MyAlloc{} };
 \end{lstlisting}
-
+\noident
 One could expect that the allocator argument is forwarded in this constructor call to the nested vectors that use the same allocator. Allocator support would enable this. \cpp{std::tuple} offers this functionality.
 
 \subsection{Which exception throw when the user try to get the expected value but there is none?}
