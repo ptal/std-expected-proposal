@@ -765,7 +765,7 @@ In \cite{OptionalRev4}, they propose to make \cpp{optional} a literal type, the 
 \subsection{Moved from state}
 %%%%%%%%%%%%%%%%%%
 
-We follow the approach taken in \cpp{optional}\cite{OptionalRev4}. Moving \cpp{expected<E,T>} do not modify the state (valued or erroneous) of \cpp{expected} and the move semantics is up to \cpp{T} or \cpp{E}.
+We follow the approach taken in \cpp{optional}\cite{OptionalRev4}. Moving \cpp{expected<E,T>} do not modify the state of the source (valued or erroneous) of \cpp{expected} and the move semantics is up to \cpp{T} or \cpp{E}.
 
 \subsection{Expected traits}
 \label{expected-traits-rational}
@@ -1213,9 +1213,10 @@ template <class Error, class Exception>
 
 \begin{lstlisting}
 std::experimental::expected<std::error_exception<std::error_code, std::system_error>, T> e = make_unexpected(err);
-e.value(); // will thow std::system_error(err);
+e.value(); // will throw std::system_error(err);
 \end{lstlisting}
 
+A class like this one could be added to the standard, but this proposal doesn't request it. 
 
 \subsection{About \cpp{expected<T, ErrorCode, Exception>}}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1229,6 +1230,139 @@ It has been suggested also to extend the design into something that contains
 \end{itemize}
 
 Again there is no major difficulty to implement it, but instead of having one variation point we have two, that is, is there a value, and if not, if is there an exception_ptr. While this would need only an extra test on the exceptional case, the authors think that it is not worth doing it as all the copy/move/swap operations would be less efficient. 
+
+\subsection{Should \cpp{expected<exception_ptr,T>} be equality comparable?}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+This proposal doesn't make \cpp{expected<exception_ptr,T>} comparable as \cpp{exception_ptr} equality comparison is shallow and doesn't provides relational operators.
+
+Should \cpp{expected<exception_ptr,T>} be equality comparable using shallow comparison?
+
+\subsection{Should \cpp{expected<E,T>} make all the unexpected values equal?}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Currently \cpp{expected<E,T>} and \cpp{expected<exception_ptr,T>} don't compare its values in the same way.
+Should \cpp{expected<E,T>} make all the unexpected values equal as it does \cpp{expected<exception_ptr,T>}?
+
+\subsection{Should \cpp{expected<errc,T>} and \cpp{expected<exception_ptr,T>} be represented by two different classes?}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+As the behavior of \cpp{expected<errc,T>} and \cpp{expected<exception_ptr,T>} differs in a lot of points (at least currently), should \cpp{expected<E,T>} and \cpp{expected<exception_ptr,T>} be represented by two different classes?
+
+\subsection{Should \cpp{expected<E,T>} throw \cpp{E} instead of \cpp{bad_expected_access<E>}?}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+As any type can be thrown as an exception, should \cpp{expected<E,T>} throw \cpp{E} instead of \cpp{bad_expected_access<E>}? 
+If yes, should \cpp{optional<T>} throw \cpp{nullopt_t} to be coherent? 
+
+
+\subsection{Should \cpp{expected<E,T>} be convertible from \cpp{E} when \cpp{E} it is not convertible to \cpp{T}}?
+
+The implicit conversion from \cpp{E} has been forbidden to avoid ambiguity when \cpp{E} and \cpp{T} are the same type. 
+However when \cpp{E} it is not convertible to \cpp{T} there wouldn't any ambiguity. 
+Should the implicit conversion be allowed in this case?
+
+\subsection{Should a specific exception be thrown when the \cpp{expected<exception_ptr,T>} does have a value neither an exception stored?}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+The following call in (1) is undefined behavior. Should a specific exception be thrown?
+
+\begin{lstlisting}
+expected<exception_pre,int> e;
+e.value(); // (1)
+\end{lstlisting}
+
+\subsection{Should \cpp{map}/\cpp{bind}/\cpp{then} catch the exceptions throw by the continuation?}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+It is easy to catch the exceptions when the type is \cpp{expected<exception_ptr,T>}. However, doing it for \cpp{expected<E,T>} needs a conversion from the current exception and the error E.
+
+This proposal requires that the continuation doesn't throw exceptions as we don't have a general solution.
+
+Should  \cpp{expected<exception_ptr,T>::map/bind/then} catch the exceptions and propagate them on the result?
+
+Should  \cpp{expected<E,T>::map/bind/then} catch the exceptions and propagate them on the result by doing a transformation from the exception to the error? If yes, how to configure it?
+
+\subsection{Should the order of parameters be reversed \cpp{expected<T,E>} instead of \cpp{expected<E,T>}?}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+It has been argued that the name of the class \cpp{expected} would need as first parameter the value type and not the error type.
+
+The original class was defined just in this way \cpp{expected<T,E>}. We moved to the current \cpp{expected<E,T>} form to be able to write
+
+\begin{lstlisting}
+auto e  = expected<error_condition>::make(1) // result is expected<error_condition, int>
+\end{lstlisting}
+
+We can comeback to the original design. However we need to remove this \cpp{expected<E>::make(T)} function. 
+
+We could add it on a specific type constructor \cpp{expected_tc} (a better name of course)
+
+\begin{lstlisting}
+auto e  = expected_tc<error_condition>::make(1) // result would be expected<int, error_condition>.
+\end{lstlisting}
+
+
+\subsection{Do we need a of \cpp{expected<E,T>::error_or} function?}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+It has been argued that the error should be always available and that often there is a success value associated to the error.
+
+\cpp{expected <E,T>} would be seen more like something  
+
+\begin{lstlisting}
+struct { E; optional<T> }. 
+\end{lstlisting}
+
+The following code was show as use case
+
+\begin{lstlisting}
+auto e = function();
+switch (e.status()) {
+  success: ....; break;
+  too_green: ....; break;
+  too_pink: ....; break;
+} 
+\end{lstlisting}
+
+With the current interface the user could be tempted to do
+
+As it stands, I think the code would have to be:
+
+\begin{lstlisting}
+auto e = function();
+if (e) {
+  /*success:*/ ....;
+} else {
+  switch (e.status()) {
+  case too_green: ....; break;
+  case too_pink: ....; break;
+  }
+} 
+\end{lstlisting}
+
+This could be done with the current interface as follows
+
+\begin{lstlisting}
+auto e = function();
+switch (error_or(e, success)) {
+  success: ....; break;
+  too_green: ....; break;
+  too_pink: ....; break;
+} 
+\end{lstlisting}
+
+where
+
+\begin{lstlisting}
+template <class E, class T>
+E error_or(expected<E,T> const&, E err) {
+  if(e) return err;
+  else return error();
+}
+\end{lstlisting}
+
+Do we need to add such a \cpp{error_or} function? as member? 
 
 %%%%%%%%%%%%%%
 \section{Proposed Wording}
@@ -2061,8 +2195,7 @@ if \cpp{bool(*this)} and \cpp{! rhs}, initializes a temporary variable e by dire
 calls to \cpp{rhs.swap(*this)};
 \end{wordingTextItem}
 \begin{wordingTextItem}{Exception Safety}
-\todo{This must be reworded.}
-If any exception is thrown, values of \cpp{has_value} and \cpp{rhs.has_value} remain unchanged. If an exception is thrown during the call to function swap the state of \cpp{val} and \cpp{rhs.val} is determined by the exception safety guarantee of swap for lvalues of \cpp{T}. If an exception is thrown during the call to \cpp{T}'s move constructor, the state of \cpp{val} and \cpp{rhs.val} is determined by the exception safety guarantee of \cpp{T}'s move constructor.
+\todo{This must be worded.}
 \end{wordingTextItem}
 \begin{wordingTextItem}{Throws}
 Any exceptions that the expressions in the Effects clause throw.
@@ -2499,6 +2632,7 @@ otherwise, returns \cpp{*this}.
 \begin{lstlisting}
   template <class E>
   class expected<E, holder>
+  {
   public:
     template <class T>
     using type = expected<E,T>
@@ -2755,9 +2889,7 @@ struct hash<expected<E,T>>;
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Requires}
-\todo{This must be reworded}
-
-The template specilaization \cpp{hash<T>} and \cpp{hash<E>} shall meet the requirements of class template \cpp{hash} (Z.X.Y). The template specialization \cpp{hash<expected<E,T>>} shall meet the requirements of class template \cpp{hash}. For an object \cpp{o} of type \cpp{expected<E,T>}, \cpp{if bool(o)}, \cpp{hash<expected<E,T>>()(o)} shall evaluate to the same value as \cpp{hash<T, E>()(*o);} otherwise it evaluates to an unspecified value.
+The template specialization \cpp{hash<T>} and \cpp{hash<E>} shall meet the requirements of class template \cpp{hash} (Z.X.Y). The template specialization \cpp{hash<expected<E,T>>} shall meet the requirements of class template \cpp{hash}. For an object \cpp{e} of type \cpp{expected<E,T>}, \cpp{if bool(e)}, \cpp{hash<expected<E,T>>()(e)} shall evaluate to the same value as \cpp{hash<T, E>()(*e);} otherwise it evaluates to an unspecified value if \cpp{E} is \cpp{exception_ptr}  or \cpp{hash<T, E>()(e.error());}.
 \end{wordingTextItem}
 \end{wordingPara}
 
