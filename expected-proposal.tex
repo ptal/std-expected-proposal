@@ -1243,7 +1243,7 @@ Again there is no major difficulty to implement it, but instead of having one va
 
 This proposal doesn't make \cpp{expected<exception_ptr,T>} comparable as \cpp{exception_ptr} equality comparison is shallow and doesn't provides relational operators.
 
-Should \cpp{expected<exception_ptr,T>} be equality comparable using shallow comparision?
+Should \cpp{expected<exception_ptr,T>} be equality comparable using shallow comparison?
 
 \subsection{Should \cpp{expected<E,T>} make all the unexpected values equal?}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -2140,8 +2140,7 @@ if \cpp{bool(*this)} and \cpp{! rhs}, initializes a temporary variable e by dire
 calls to \cpp{rhs.swap(*this)};
 \end{wordingTextItem}
 \begin{wordingTextItem}{Exception Safety}
-\todo{This must be reworded.}
-If any exception is thrown, values of \cpp{has_value} and \cpp{rhs.has_value} remain unchanged. If an exception is thrown during the call to function swap the state of \cpp{val} and \cpp{rhs.val} is determined by the exception safety guarantee of swap for lvalues of \cpp{T}. If an exception is thrown during the call to \cpp{T}'s move constructor, the state of \cpp{val} and \cpp{rhs.val} is determined by the exception safety guarantee of \cpp{T}'s move constructor.
+\todo{This must be worded.}
 \end{wordingTextItem}
 \begin{wordingTextItem}{Throws}
 Any exceptions that the expressions in the Effects clause throw.
@@ -2835,9 +2834,7 @@ struct hash<expected<E,T>>;
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Requires}
-\todo{This must be reworded}
-
-The template specilaization \cpp{hash<T>} and \cpp{hash<E>} shall meet the requirements of class template \cpp{hash} (Z.X.Y). The template specialization \cpp{hash<expected<E,T>>} shall meet the requirements of class template \cpp{hash}. For an object \cpp{o} of type \cpp{expected<E,T>}, \cpp{if bool(o)}, \cpp{hash<expected<E,T>>()(o)} shall evaluate to the same value as \cpp{hash<T, E>()(*o);} otherwise it evaluates to an unspecified value.
+The template specialization \cpp{hash<T>} and \cpp{hash<E>} shall meet the requirements of class template \cpp{hash} (Z.X.Y). The template specialization \cpp{hash<expected<E,T>>} shall meet the requirements of class template \cpp{hash}. For an object \cpp{e} of type \cpp{expected<E,T>}, \cpp{if bool(e)}, \cpp{hash<expected<E,T>>()(e)} shall evaluate to the same value as \cpp{hash<T, E>()(*e);} otherwise it evaluates to an unspecified value if \cpp{E} is \cpp{exception_ptr}  or \cpp{hash<T, E>()(e.error());}.
 \end{wordingTextItem}
 \end{wordingPara}
 
