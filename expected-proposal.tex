@@ -1221,9 +1221,10 @@ template <class Error, class Exception>
 
 \begin{lstlisting}
 std::experimental::expected<std::error_exception<std::error_code, std::system_error>, T> e = make_unexpected(err);
-e.value(); // will thow std::system_error(err);
+e.value(); // will throw std::system_error(err);
 \end{lstlisting}
 
+A class like this one could be added to the standard, but this proposal doesn't request it. 
 
 \subsection{About \cpp{expected<T, ErrorCode, Exception>}}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1288,7 +1289,7 @@ This proposal requires that the continuation doesn't throw exceptions as we don'
 
 Should  \cpp{expected<exception_ptr,T>::map/bind/then} catch the exceptions and propagate them on the result?
 
-Should  \cpp{expected<E,T>::map/bind/then} catch the exceptions and propagate them on the result by doing a transfermation from the exception to the error? If yes, how to configure it?
+Should  \cpp{expected<E,T>::map/bind/then} catch the exceptions and propagate them on the result by doing a transformation from the exception to the error? If yes, how to configure it?
 
 \subsection{Should the order of parameters be reversed \cpp{expected<T,E>} instead of \cpp{expected<E,T>}?}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1308,6 +1309,68 @@ We could add it on a specific type constructor \cpp{expected_tc} (a better name 
 \begin{lstlisting}
 auto e  = expected_tc<error_condition>::make(1) // result would be expected<int, error_condition>.
 \end{lstlisting}
+
+
+\subsection{Do we need a of \cpp{expected<E,T>::error_or} function?}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+It has been argued that the error should be always available and that often there is a success value associated to the error.
+
+\cpp{expected <E,T>} would be seen more like something  
+
+\begin{lstlisting}
+struct { E; optional<T> }. 
+\end{lstlisting}
+
+The following code was show as use case
+
+\begin{lstlisting}
+auto e = function();
+switch (e.status()) {
+  success: ....; break;
+  too_green: ....; break;
+  too_pink: ....; break;
+} 
+\end{lstlisting}
+
+With the current interface the user could be tempted to do
+
+As it stands, I think the code would have to be:
+
+\begin{lstlisting}
+auto e = function();
+if (e) {
+  /*success:*/ ....;
+} else {
+  switch (e.status()) {
+  case too_green: ....; break;
+  case too_pink: ....; break;
+  }
+} 
+\end{lstlisting}
+
+This could be done with the current interface as follows
+
+\begin{lstlisting}
+auto e = function();
+switch (error_or(e, success)) {
+  success: ....; break;
+  too_green: ....; break;
+  too_pink: ....; break;
+} 
+\end{lstlisting}
+
+where
+
+\begin{lstlisting}
+template <class E, class T>
+E error_or(expected<E,T> const&, E err) {
+  if(e) return err;
+  else return error();
+}
+\end{lstlisting}
+
+Do we need to add such a \cpp{error_or} function? as member? 
 
 %%%%%%%%%%%%%%
 \section{Proposed Wording}
