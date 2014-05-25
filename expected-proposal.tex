@@ -304,10 +304,10 @@ expected<error_condition, int> f(int i, int j, int k)
 The compiler will gently say he can convert an \cpp{expected<error_condition, expected<error_condition, int>>} to \cpp{expected<error_condition, int>}. This is because the member \cpp{map} wraps the result in Expected and since we use twice the \cpp{map} member it wraps it twice. The \cpp{bind}\footnote{To not confound with \cpp{std::bind} which is not related to monad.} member wraps the result of the continuation only if it is not already wrapped. The correct version is as follow:
 
 \begin{lstlisting}
-expected<exception_ptr,int> f(int i, int j, int k)
+expected<error_condition, int> f(int i, int j, int k)
 {
   return safe_divide(i, k).bind([=](int q1) {
-      return safe_divide(j,k).map([=](int q2) {
+      return safe_divide(j,k).bind([=](int q2) {
         return q1+q2;
       });
     });
@@ -359,58 +359,6 @@ expected<error_condition, int> divide3(int i, int j)
 \end{lstlisting}
 
 An advantage of this version is to be coherent with the \cpp{bind} and \cpp{map} functions. It also provides a more uniform way to analyze error and recover from some of these. Finally, it encourages the user to code its own ``error-resolver'' function and leads to a code with distinct treatment layers.
-
-\subsection{A Configurable Expected}
-
-Expected is configurable through the trait \cpp{expected_traits}. The first variation point is the behavior of \cpp{value()} when \cpp{expected<E,T} contains an error. A default strategy would throw a \cpp{bad_expected_access} exception but it might not be satisfiable for every error types. For example, some might want to encapsulate an \cpp{error_condition} into a specific exception. In debug mode, they might want to use an \cpp{assert} call.
-
-The other variation point is the behavior triggered when the continuation argument of \cpp{bind} or \cpp{map} throws an exception. If the exception thrown is \cpp{system_error} and error type of Expected is \cpp{error_code}, we might want to simply store the contained error. Without more discussion, let's show how to customize \cpp{expected<E, T>}, consider the following exception-oriented function:
-
-\begin{lstlisting}
-class error_cond : public std::exception {
-  // Implementation similar to system_error but for error_condition here.
-};
-
-int safe_divide(int i, int j)
-{
-  if (j == 0) 
-    throw error_cond(error_condition(arithmetic_errc::divide_by_zero));
-  return i/j;
-}
-\end{lstlisting}
-
-Imagine \cpp{j} encapsulated into an \cpp{expected}, you will call \cpp{map} with \cpp{safe_divide} as the continuation. Let's see what it looks like:
-
-\begin{lstlisting}
-expected<error_condition, int> f(int i, const expected<error_condition, int>& j)
-{
-  return j.map(bind(safe_divide, i, _1));
-}
-\end{lstlisting}
-
-If we specialize \cpp{expected_traits} for \cpp{error_condition}, we can achieve the expected behavior:
-
-\begin{lstlisting}
-template <class T>
-struct expected_traits<expected<error_condition, T>>
-{
-  static expected<error_condition, T> catch_exception(exception_ptr e)
-  {
-    try{
-      rethrow_exception(e);
-    } catch(const error_cond& e) {
-      return make_unexpected(e.code());
-    }
-  }
-
-  static void bad_access(const error_type &e)
-  {
-    throw error_cond(e);
-  }
-};
-\end{lstlisting}
-
-The semantics of \cpp{catch_exception} is to rethrow the current exception and catch only the exceptions we are interest in. The default behavior let flight the exception thrown by the continuation. We created a bridge between an \cpp{error_condition} and the \cpp{error_cond} exception. More insight on link between Expected and exceptions in the section \ref{expected-traits-rational}.
 
 \section{Impacts on the Standard}
 %%%%%%%%%%%%%%%%%
@@ -643,7 +591,7 @@ void interact() {
 }
 \end{lstlisting}
 
-The exception thrown depend on the expected error type. By default it throws \cpp{bad_expected_access<E>} (derived from \cpp{logic_error}) which will contain the stored error. In the case of \cpp{expected<exception_ptr>}, it thows the exception stored in the \cpp{exception_ptr}. This behavior is customizable by specializing \cpp{expected_traits}, for example, it is also specialized for \cpp{error_code} and throw a \cpp{system_error} if we try to access an erroneous \cpp{expected<error_code,T>}. If these specializations are undesirables, we provide a third template argument of \cpp{expected<E,T,Traits>} defaulted to \cpp{expected_traits<E,T>}, hence the user can provide its own trait.
+The exception thrown depend on the expected error type. By default it throws \cpp{bad_expected_access<E>} (derived from \cpp{logic_error}) which will contain the stored error. In the case of \cpp{expected<exception_ptr>}, it throws the exception stored in the \cpp{exception_ptr}. An approach enabling customization of this behavior is presented in the section \ref{configurable-expected}.
 
 \cpp{bad_expected_access<E>} and \cpp{bad_optional_access} could inherit both from a \cpp{bad_access} exception derived from \cpp{logic_error}, but this is not proposed.
 
@@ -767,9 +715,6 @@ In \cite{OptionalRev4}, they propose to make \cpp{optional} a literal type, the 
 
 We follow the approach taken in \cpp{optional}\cite{OptionalRev4}. Moving \cpp{expected<E,T>} do not modify the state of the source (valued or erroneous) of \cpp{expected} and the move semantics is up to \cpp{T} or \cpp{E}.
 
-\subsection{Expected traits}
-\label{expected-traits-rational}
-
 \subsection{IO operations}
 %%%%%%%%%%%%%%%%%%
 
@@ -820,13 +765,11 @@ It has the same wrapping strategy than \cpp{bind}: it doesn't wrap if the contin
 
 \subsubsection{Exception thrown in the continuation}
 
-Since we think \cpp{expected} will be mainly used as an alternative to exception, we provide a way to capture the exceptions thrown in these 3 functions. 
-
-Indeed, if an exception is thrown by the continuation, \cpp{traits_type::catch_exception(current_exception())} will be called. For example, if \cpp{E == std::exception_ptr}, the default trait will store it inside expected instead of letting the exception flight. It can be useful if we want to enforce a nothrow behavior when using the monadic operations.
+This behavior is left open in the section \ref{configurable-expected}. Currently, the exceptions thrown in the continuations are not caught.
 
 \subsubsection{\cpp{catch_error} operation}
 
-This last member function is used when we want to use or recover from an error. When chaining multiple \cpp{bind} or \cpp{map} operation we don't know if the operations have succeeded. A common way is thus to add a \cpp{catch_error} at the end and act in consequence.
+This last member function is used when we want to use or recover from an error. When chaining multiple \cpp{bind} or \cpp{map} operations we don't know if the operations have succeeded. A common way is thus to add a \cpp{catch_error} at the end and act in consequence.
 
 \begin{lstlisting}
 getInt().map([](int i){return i * 2;})
@@ -834,6 +777,7 @@ getInt().map([](int i){return i * 2;})
         .catch_error(log_error);
 \end{lstlisting}
 
+\noindent
 Here the last operation is simply used to log the error but the \cpp{catch_error} also accepts function that try to recover from a previous error.
 
 \begin{lstlisting}
@@ -1025,7 +969,7 @@ The table \ref{comp-monads} presents a brief comparison between \cpp{optional<T>
 \hline
 \textbf{state} & bool()  &  bool() / valid & valid / ready / (has_value, see \cite{MoreAsync}) \\
 \hline
-\textbf{observers} & pointer-like / value / value_or & pointer-like / value / error / value_or / value_or_throw & get / (get_exception_ptr, see \cite{MoreAsync}) \\
+\textbf{observers} & pointer-like / value / value_or & pointer-like / value / error / value_or & get / (get_exception_ptr, see \cite{MoreAsync}) \\
 \hline
 \textbf{visitation} & no & map / bind / then / catch_error  & then / (next/recover see \cite{MoreAsync}) \\
 \hline
@@ -1137,6 +1081,61 @@ expected<exception_ptr,int> f2(int i, int j, int k)
 
 Note that this meaning of EXPECT is not valid for the list monad. 
 
+\subsection{A Configurable Expected}
+\label{configurable-expected}
+
+Expected might be configurable through a trait \cpp{expected_traits}. The first variation point is the behavior of \cpp{value()} when \cpp{expected<E,T>} contains an error. The current strategy throw a \cpp{bad_expected_access} exception (or the contained exception if the type is \cpp{expected<exception_ptr, T>}) but it might not be satisfactory for every error types. For example, some might want to encapsulate an \cpp{error_condition} into a specific exception. Or in debug mode, they might want to use an \cpp{assert} call.
+
+The other variation point is the behavior triggered when the continuation argument of \cpp{bind} or \cpp{map} throws an exception. If the exception thrown is \cpp{system_error} and the error type is \cpp{error_code}, we might want to store the error carried by the exception. Without more discussion, let's show how we could customize \cpp{expected<E, T>}, consider the following exception-oriented function:
+
+\begin{lstlisting}
+class error_cond : public std::exception {
+  // Implementation similar to system_error but for error_condition here.
+};
+
+int safe_divide(int i, int j)
+{
+  if (j == 0) 
+    throw error_cond(error_condition(arithmetic_errc::divide_by_zero));
+  return i/j;
+}
+\end{lstlisting}
+
+\noindent
+Imagine \cpp{j} encapsulated into an \cpp{expected}, you will call \cpp{map} with \cpp{safe_divide} as the continuation. Let's see what it looks like:
+
+\begin{lstlisting}
+expected<error_condition, int> f(int i, const expected<error_condition, int>& j)
+{
+  return j.map(bind(safe_divide, i, _1));
+}
+\end{lstlisting}
+
+\noindent
+If we specialize \cpp{expected_traits} for \cpp{error_condition}, we can achieve the expected behavior:
+
+\begin{lstlisting}
+template <class T>
+struct expected_traits<expected<error_condition, T>>
+{
+  static expected<error_condition, T> catch_exception(exception_ptr e)
+  {
+    try{
+      rethrow_exception(e);
+    } catch(const error_cond& e) {
+      return make_unexpected(e.code());
+    }
+  }
+
+  static void bad_access(const error_type &e)
+  {
+    throw error_cond(e);
+  }
+};
+\end{lstlisting}
+
+The semantics of \cpp{catch_exception} is to rethrow the current exception and catch only the exceptions we are interested in. The default behavior let flight the exception thrown by the continuation. We created a bridge between an \cpp{error_condition} and the \cpp{error_cond} exception.
+
 \subsection{Allocator support}
 %%%%%%%%%%%%%%%
 
@@ -1146,7 +1145,8 @@ As \cpp{optional<T>},  \cpp{expected<E,T>} does not allocate memory. So it can d
 typedef vector<expected<error, vector<int, MyAlloc>>, MyAlloc> MyVec;
 MyVec v{ v2, MyAlloc{} };
 \end{lstlisting}
-\noident
+
+\noindent
 One could expect that the allocator argument is forwarded in this constructor call to the nested vectors that use the same allocator. Allocator support would enable this. \cpp{std::tuple} offers this functionality.
 
 \subsection{Which exception throw when the user try to get the expected value but there is none?}
