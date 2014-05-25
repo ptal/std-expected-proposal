@@ -304,10 +304,10 @@ expected<error_condition, int> f(int i, int j, int k)
 The compiler will gently say he can convert an \cpp{expected<error_condition, expected<error_condition, int>>} to \cpp{expected<error_condition, int>}. This is because the member \cpp{map} wraps the result in Expected and since we use twice the \cpp{map} member it wraps it twice. The \cpp{bind}\footnote{To not confound with \cpp{std::bind} which is not related to monad.} member wraps the result of the continuation only if it is not already wrapped. The correct version is as follow:
 
 \begin{lstlisting}
-expected<exception_ptr,int> f(int i, int j, int k)
+expected<error_condition, int> f(int i, int j, int k)
 {
   return safe_divide(i, k).bind([=](int q1) {
-      return safe_divide(j,k).map([=](int q2) {
+      return safe_divide(j,k).bind([=](int q2) {
         return q1+q2;
       });
     });
@@ -359,58 +359,6 @@ expected<error_condition, int> divide3(int i, int j)
 \end{lstlisting}
 
 An advantage of this version is to be coherent with the \cpp{bind} and \cpp{map} functions. It also provides a more uniform way to analyze error and recover from some of these. Finally, it encourages the user to code its own ``error-resolver'' function and leads to a code with distinct treatment layers.
-
-\subsection{A Configurable Expected}
-
-Expected is configurable through the trait \cpp{expected_traits}. The first variation point is the behavior of \cpp{value()} when \cpp{expected<E,T} contains an error. A default strategy would throw a \cpp{bad_expected_access} exception but it might not be satisfiable for every error types. For example, some might want to encapsulate an \cpp{error_condition} into a specific exception. In debug mode, they might want to use an \cpp{assert} call.
-
-The other variation point is the behavior triggered when the continuation argument of \cpp{bind} or \cpp{map} throws an exception. If the exception thrown is \cpp{system_error} and error type of Expected is \cpp{error_code}, we might want to simply store the contained error. Without more discussion, let's show how to customize \cpp{expected<E, T>}, consider the following exception-oriented function:
-
-\begin{lstlisting}
-class error_cond : public std::exception {
-  // Implementation similar to system_error but for error_condition here.
-};
-
-int safe_divide(int i, int j)
-{
-  if (j == 0) 
-    throw error_cond(error_condition(arithmetic_errc::divide_by_zero));
-  return i/j;
-}
-\end{lstlisting}
-
-Imagine \cpp{j} encapsulated into an \cpp{expected}, you will call \cpp{map} with \cpp{safe_divide} as the continuation. Let's see what it looks like:
-
-\begin{lstlisting}
-expected<error_condition, int> f(int i, const expected<error_condition, int>& j)
-{
-  return j.map(bind(safe_divide, i, _1));
-}
-\end{lstlisting}
-
-If we specialize \cpp{expected_traits} for \cpp{error_condition}, we can achieve the expected behavior:
-
-\begin{lstlisting}
-template <class T>
-struct expected_traits<expected<error_condition, T>>
-{
-  static expected<error_condition, T> catch_exception(exception_ptr e)
-  {
-    try{
-      rethrow_exception(e);
-    } catch(const error_cond& e) {
-      return make_unexpected(e.code());
-    }
-  }
-
-  static void bad_access(const error_type &e)
-  {
-    throw error_cond(e);
-  }
-};
-\end{lstlisting}
-
-The semantics of \cpp{catch_exception} is to rethrow the current exception and catch only the exceptions we are interest in. The default behavior let flight the exception thrown by the continuation. We created a bridge between an \cpp{error_condition} and the \cpp{error_cond} exception. More insight on link between Expected and exceptions in the section \ref{expected-traits-rational}.
 
 \section{Impacts on the Standard}
 %%%%%%%%%%%%%%%%%
@@ -643,7 +591,7 @@ void interact() {
 }
 \end{lstlisting}
 
-The exception thrown depend on the expected error type. By default it throws \cpp{bad_expected_access<E>} (derived from \cpp{logic_error}) which will contain the stored error. In the case of \cpp{expected<exception_ptr>}, it thows the exception stored in the \cpp{exception_ptr}. This behavior is customizable by specializing \cpp{expected_traits}, for example, it is also specialized for \cpp{error_code} and throw a \cpp{system_error} if we try to access an erroneous \cpp{expected<error_code,T>}. If these specializations are undesirables, we provide a third template argument of \cpp{expected<E,T,Traits>} defaulted to \cpp{expected_traits<E,T>}, hence the user can provide its own trait.
+The exception thrown depend on the expected error type. By default it throws \cpp{bad_expected_access<E>} (derived from \cpp{logic_error}) which will contain the stored error. In the case of \cpp{expected<exception_ptr>}, it throws the exception stored in the \cpp{exception_ptr}. An approach enabling customization of this behavior is presented in the section \ref{configurable-expected}.
 
 \cpp{bad_expected_access<E>} and \cpp{bad_optional_access} could inherit both from a \cpp{bad_access} exception derived from \cpp{logic_error}, but this is not proposed.
 
@@ -767,9 +715,6 @@ In \cite{OptionalRev4}, they propose to make \cpp{optional} a literal type, the 
 
 We follow the approach taken in \cpp{optional}\cite{OptionalRev4}. Moving \cpp{expected<E,T>} do not modify the state of the source (valued or erroneous) of \cpp{expected} and the move semantics is up to \cpp{T} or \cpp{E}.
 
-\subsection{Expected traits}
-\label{expected-traits-rational}
-
 \subsection{IO operations}
 %%%%%%%%%%%%%%%%%%
 
@@ -820,13 +765,11 @@ It has the same wrapping strategy than \cpp{bind}: it doesn't wrap if the contin
 
 \subsubsection{Exception thrown in the continuation}
 
-Since we think \cpp{expected} will be mainly used as an alternative to exception, we provide a way to capture the exceptions thrown in these 3 functions. 
-
-Indeed, if an exception is thrown by the continuation, \cpp{traits_type::catch_exception(current_exception())} will be called. For example, if \cpp{E == std::exception_ptr}, the default trait will store it inside expected instead of letting the exception flight. It can be useful if we want to enforce a nothrow behavior when using the monadic operations.
+This behavior is left open in the section \ref{configurable-expected}. Currently, the exceptions thrown in the continuations are not caught.
 
 \subsubsection{\cpp{catch_error} operation}
 
-This last member function is used when we want to use or recover from an error. When chaining multiple \cpp{bind} or \cpp{map} operation we don't know if the operations have succeeded. A common way is thus to add a \cpp{catch_error} at the end and act in consequence.
+This last member function is used when we want to use or recover from an error. When chaining multiple \cpp{bind} or \cpp{map} operations we don't know if the operations have succeeded. A common way is thus to add a \cpp{catch_error} at the end and act in consequence.
 
 \begin{lstlisting}
 getInt().map([](int i){return i * 2;})
@@ -834,6 +777,7 @@ getInt().map([](int i){return i * 2;})
         .catch_error(log_error);
 \end{lstlisting}
 
+\noindent
 Here the last operation is simply used to log the error but the \cpp{catch_error} also accepts function that try to recover from a previous error.
 
 \begin{lstlisting}
@@ -1025,7 +969,7 @@ The table \ref{comp-monads} presents a brief comparison between \cpp{optional<T>
 \hline
 \textbf{state} & bool()  &  bool() / valid & valid / ready / (has_value, see \cite{MoreAsync}) \\
 \hline
-\textbf{observers} & pointer-like / value / value_or & pointer-like / value / error / value_or  & get / (get_exception_ptr, see \cite{MoreAsync}) \\
+\textbf{observers} & pointer-like / value / value_or & pointer-like / value / error / value_or & get / (get_exception_ptr, see \cite{MoreAsync}) \\
 \hline
 \textbf{visitation} & no & map / bind / then / catch_error  & then / (next/recover see \cite{MoreAsync}) \\
 \hline
@@ -1043,7 +987,9 @@ The table \ref{comp-monads} presents a brief comparison between \cpp{optional<T>
 \subsection{Better support for monad}
 \label{better-support-for-monad}
 
-A cleaner solution uses the variadic free function \cpp{map}\footnote{\cpp{map} stands for ``functor map''.}:
+In the use-cases section (\ref{divide-example}), we present expected as a better way to handle errors than exception or error code. However the current syntax using lambda and chaining monadic operations (such as \cpp{map}) can be tedious to use. We propose different solutions to overcome this problem, since the solutions are more general than the scope of this proposal we discuss them in the open points section.
+
+A first solution that do not require change in the language is the use of variadic monadic operation. For example using a variadic free function \cpp{map}, we can write the $i/k + j/k$ function as following:
 
 \begin{lstlisting}
 expected<exception_ptr,int> f(int i, int j, int k)
@@ -1054,34 +1000,27 @@ expected<exception_ptr,int> f(int i, int j, int k)
 }
 \end{lstlisting}
 
-The function \cpp{map} returns the first erroneous expected argument or, if they all contain a value, the result of the \cpp{plus} operation.
+This is most readable than the member \cpp{map} function and the use of lambda. However it suffers from two major deficiencies:
 
+\begin{itemize}
+\item \textbf{Eager evaluation} All arguments are evaluated even if the first fails.
+\item \textbf{Unordered evaluation} We cannot control the order of evaluation thus it presupposed the function to have no side effects.
+\end{itemize}
 
-Now let's rewrite this using a possible C++ language extension: adding a DO expression like the Haskell do expression. It is something similar  to the \cpp{await} extension for futures however it is not limited to futures. It could works for any monad.   
-
-The grammar could be
+Considering these two problems we consider a possible C++ language extension: a do-notation similar to the one in Haskell. As with the variadic \cpp{map} function, it is not limited to \cpp{expected} but could work with any kind of monad. Next follow the grammar:
 
 \begin{lstlisting}
-do-expression ::= do-initialization ':' do-expression-or-expression
-
-do-expression-or-expression ::= do-expression | expression
-
+expression ::= ...
+            | do-expression
+do-expression ::= do-initialization ':' expression
 do-initialization ::= type var '<-' expression
 \end{lstlisting}
 
-The meaning of \cpp{do-expression}  is given by a transformation \cpp{[[ ]]}
+\noindent
+The previous function could be rewritten as:
 
 \begin{lstlisting}
-[[do-expression]] =
-  bind(expression,[&](type var) {
-    return [[do-expression-or-expression]]
-  });
-\end{lstlisting}
-
-The previous function could be written as
-
-\begin{lstlisting}
-expected<exception_ptr,int> f2(int i, int j, int k)
+expected<error_condition, int> f2(int i, int j, int k)
 {
   return (
     auto s1 <- safe_divide(i, k) :
@@ -1091,13 +1030,22 @@ expected<exception_ptr,int> f2(int i, int j, int k)
 }
 \end{lstlisting}
 
-resulting in the transformed C++ code
+This syntax is far easier to read and to understand. A lazy evaluation of statement is possible and the order is well-defined. Nevertheless, it can be considered as a syntactic sugar for \cpp{bind}. We give a syntactic transformation following:
 
 \begin{lstlisting}
-expected<exception_ptr,int> f2(int i, int j, int k)
+[[do-expression]] =
+  bind(expression, [&](type var) {
+    return [[do-expression-or-expression]]
+  });
+\end{lstlisting}
+\noindent
+The transformed code of the previous function is:
+
+\begin{lstlisting}
+expected<error_condition, int> f2(int i, int j, int k)
 {
-  return bind(safe_divide(i, k) ,[&r](auto s1) {
-    return bind(safe_divide(j, k),[&r](auto s2) {
+  return bind(safe_divide(i, k) ,[=](auto s1) {
+    return bind(safe_divide(j, k),[=](auto s2) {
       return s1 + s2;
     });
   }); 
@@ -1107,7 +1055,7 @@ expected<exception_ptr,int> f2(int i, int j, int k)
 This would give the exact same results as the previous version. However, the function \cpp{f2} is much simpler and clearer than \cpp{f} because it doesn't have to explicitly handle any of the error cases. When an error case occurs, it is returned as the result of the function, but if not, the correct result of a subexpression is bound to a name (\cpp{s1} or \cpp{s2}), and that result can be used in later parts of the computation. The code is a lot simpler to write. The more complicated the error-handling function, the more important this will be.
 
 But, the standard doesn't have this DO expression yet.
-Waiting for a do-statement the user could define some macros (see \cite{monad_do_poc} and define \cpp{f2} as
+Waiting for a do-statement the user could define some macros and define \cpp{f2} as
 
 \begin{lstlisting}
 expected<exception_ptr,int> f2(int i, int j, int k)
@@ -1120,21 +1068,12 @@ expected<exception_ptr,int> f2(int i, int j, int k)
 }
 \end{lstlisting}
 
-In the case of expected and optional, that is, monads that are always ready and have only one value stored, the following macro 
-
-\begin{lstlisting}
-#define EXPECT(V, EXPR) \
-auto BOOST_JOIN(expected,V) = EXPR; \
-if (! has_value(BOOST_JOIN(expected,V))) return get_unexpected(BOOST_JOIN(expected,V)); \
-auto V = deref(BOOST_JOIN(expected,V))
-\end{lstlisting}
-
-can be used to obtain the same result.
+In the case of expected and optional, and similarly to the proposed \cpp{await} keyword we could use an \cpp{expect} keyword (it returns if the expected is not valued):
 
 \begin{lstlisting}
 expected<exception_ptr,int> f2(int i, int j, int k)
 {
-  EXPECT(s1, safe_divide(i, k) );
+  EXPECT(s1, safe_divide(i, k));
   EXPECT(s2, safe_divide(j, k));
   return s1 + s2;
 }
@@ -1142,16 +1081,72 @@ expected<exception_ptr,int> f2(int i, int j, int k)
 
 Note that this meaning of EXPECT is not valid for the list monad. 
 
+\subsection{A Configurable Expected}
+\label{configurable-expected}
+
+Expected might be configurable through a trait \cpp{expected_traits}. The first variation point is the behavior of \cpp{value()} when \cpp{expected<E,T>} contains an error. The current strategy throw a \cpp{bad_expected_access} exception (or the contained exception if the type is \cpp{expected<exception_ptr, T>}) but it might not be satisfactory for every error types. For example, some might want to encapsulate an \cpp{error_condition} into a specific exception. Or in debug mode, they might want to use an \cpp{assert} call.
+
+The other variation point is the behavior triggered when the continuation argument of \cpp{bind} or \cpp{map} throws an exception. If the exception thrown is \cpp{system_error} and the error type is \cpp{error_code}, we might want to store the error carried by the exception. Without more discussion, let's show how we could customize \cpp{expected<E, T>}, consider the following exception-oriented function:
+
+\begin{lstlisting}
+class error_cond : public std::exception {
+  // Implementation similar to system_error but for error_condition here.
+};
+
+int safe_divide(int i, int j)
+{
+  if (j == 0) 
+    throw error_cond(error_condition(arithmetic_errc::divide_by_zero));
+  return i/j;
+}
+\end{lstlisting}
+
+\noindent
+Imagine \cpp{j} encapsulated into an \cpp{expected}, you will call \cpp{map} with \cpp{safe_divide} as the continuation. Let's see what it looks like:
+
+\begin{lstlisting}
+expected<error_condition, int> f(int i, const expected<error_condition, int>& j)
+{
+  return j.map(bind(safe_divide, i, _1));
+}
+\end{lstlisting}
+
+\noindent
+If we specialize \cpp{expected_traits} for \cpp{error_condition}, we can achieve the expected behavior:
+
+\begin{lstlisting}
+template <class T>
+struct expected_traits<expected<error_condition, T>>
+{
+  static expected<error_condition, T> catch_exception(exception_ptr e)
+  {
+    try{
+      rethrow_exception(e);
+    } catch(const error_cond& e) {
+      return make_unexpected(e.code());
+    }
+  }
+
+  static void bad_access(const error_type &e)
+  {
+    throw error_cond(e);
+  }
+};
+\end{lstlisting}
+
+The semantics of \cpp{catch_exception} is to rethrow the current exception and catch only the exceptions we are interested in. The default behavior let flight the exception thrown by the continuation. We created a bridge between an \cpp{error_condition} and the \cpp{error_cond} exception.
+
 \subsection{Allocator support}
 %%%%%%%%%%%%%%%
 
 As \cpp{optional<T>},  \cpp{expected<E,T>} does not allocate memory. So it can do without allocators. However, it can be useful in compound types like:
 
 \begin{lstlisting}
-typedef vector< expected<erroc, vector<int, MyAlloc>>, MyAlloc>; MyVec;
+typedef vector<expected<error, vector<int, MyAlloc>>, MyAlloc> MyVec;
 MyVec v{ v2, MyAlloc{} };
 \end{lstlisting}
 
+\noindent
 One could expect that the allocator argument is forwarded in this constructor call to the nested vectors that use the same allocator. Allocator support would enable this. \cpp{std::tuple} offers this functionality.
 
 \subsection{Which exception throw when the user try to get the expected value but there is none?}
@@ -1442,7 +1437,7 @@ Insert a new section.
 \wordingSubSec{In general}{unexpected.general}
 %%%%%%%%%%%%%%%%%%%%%%%%
 
-This subclause describes class template \cpp{unexpected_type} that wraps objects intended as unexpected. This wrapped unexpected object is used to be implicitly convertible to other object.
+This subclause describes class template \cpp{unexpected_type} that wraps objects intended as unexpected. This wrapped unexpected object is used to be implicitly convertible to other objects.
 
 \wordingSubSec{Header <experimental/unexpected> synopsis}{unexpected.synop}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1465,7 +1460,7 @@ inline namespace fundamentals_v2 {
 }}}
 \end{lstlisting}
 
-A program that necessitates the instantiation of template \cpp{unexpected} for a reference type or \cpp{void} is ill-formed.
+A program that necessitates the instantiation of template \cpp{unexpected_type} for a reference type or \cpp{void} is ill-formed.
 
 \wordingSubSec{Unexpected object type}{unexpected.object}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1479,6 +1474,8 @@ public:
     constexpr explicit unexpected_type(E const&);   
     constexpr explicit unexpected_type(E&&);
     constexpr E const& value() const;                              
+private:
+    E val; // exposition only
 }; 
 \end{lstlisting}
 
@@ -1488,7 +1485,7 @@ public:
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
-Build an unexpected by copying the parameter to the internal storage.
+Build an unexpected by copying the parameter to the internal storage \cpp{val}.
 \end{wordingTextItem}
 \end{wordingPara}
 
@@ -1498,7 +1495,7 @@ Build an unexpected by copying the parameter to the internal storage.
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
-Build an unexpected by moving the parameter to the internal storage.
+Build an unexpected by moving the parameter to the internal storage \cpp{val}.
 \end{wordingTextItem}
 \end{wordingPara}
 
@@ -1508,7 +1505,7 @@ Build an unexpected by moving the parameter to the internal storage.
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
-A const reference to the stored error.
+\cpp{val}.
 \end{wordingTextItem}
 \end{wordingPara}
 
@@ -1525,6 +1522,8 @@ public:
     template <class E>
       explicit unexpected_type(E);     
     std::exception_ptr const &value() const;                              
+private:
+    E val; // exposition only
 }; 
 \end{lstlisting}
 \noindent
@@ -1535,7 +1534,7 @@ public:
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
-Build an unexpected by copying the parameter to the internal storage.
+Build an unexpected by copying the parameter to the internal storage \cpp{val}.
 \end{wordingTextItem}
 \end{wordingPara}
 
@@ -1545,7 +1544,7 @@ Build an unexpected by copying the parameter to the internal storage.
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
-Build an unexpected by moving the parameter to the internal storage.
+Build an unexpected by moving the parameter to the internal storage \cpp{val}.
 \end{wordingTextItem}
 \end{wordingPara}
 
@@ -1555,7 +1554,7 @@ Build an unexpected by moving the parameter to the internal storage.
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
-Build an unexpected storing the result of make_exception_ptr(e).
+Build an unexpected storing the result of \cpp{val(make_exception_ptr(e))}.
 \end{wordingTextItem}
 \end{wordingPara}
 
@@ -1565,7 +1564,7 @@ Build an unexpected storing the result of make_exception_ptr(e).
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
-A const reference to the stored \cpp{exception_ptr}.
+\cpp{val}.
 \end{wordingTextItem}
 \end{wordingPara}
 
@@ -1600,7 +1599,7 @@ Insert a new section.
 \wordingSubSec{In general}{expected.general}
 %%%%%%%%%%%%%%%%%%%%%%%%
 
-This subclause describes class template expected that represents expected objects. An expected object for object type T is an object that contains the storage for another object and manages the lifetime of this contained object T, alternatively it could contain the storage for another unexpected object E. The contained object may not be initialized after the expected object has been initialized, and may not be destroyed before the expected object has been destroyed. The initialization state of the contained object is tracked by the expected object.
+This subclause describes class template expected that represents expected objects. An \cpp{expected<E,T>} object is an object that contains the storage for another object and manages the lifetime of this contained object T, alternatively it could contain the storage for another unexpected object E. The contained object may not be initialized after the expected object has been initialized, and may not be destroyed before the expected object has been destroyed. The initialization state of the contained object is tracked by the expected object.
 
 \wordingSubSec{Header <experimental/expected> synopsis}{expected.synop}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1763,20 +1762,20 @@ An instance of \cpp{expected<E,T>} is said to be unexpected if it contains an ob
 
     // \ref{expected.object.observe}, observers
     constexpr T const* operator ->() const;
-    constexpr T* operator ->();
+    T* operator ->();
     
     constexpr T const& operator *() const&;
-    constexpr T& operator *() &;
+    T& operator *() &;
     constexpr T&& operator *() &&;
     
     constexpr explicit operator bool() const noexcept;
     
     constexpr T const& value() const&;
-    constexpr T& value() &;
+    T& value() &;
     constexpr T&& value() &&;
     
     constexpr E const& error() const&;
-    constexpr E& error() &;
+    E& error() &;
     constexpr E&& error() &&;
     
     constexpr unexpected<E>  get_unexpected() const;
@@ -2276,7 +2275,7 @@ LValues of type \cpp{T} shall be swappable, \cpp{is_move_constructible<T>::value
 % -> operator.
 \begin{lstlisting}[language=C++][xleftmargin=0pt]
 constexpr T const* expected<E,T>::operator->() const;
-constexpr T* expected<E,T>::operator->(); 
+T* expected<E,T>::operator->(); 
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Requires}
@@ -2293,8 +2292,7 @@ Unless \cpp{T} is a user-defined type with overloaded unary operator\&, the firs
 % * operator.
 \begin{lstlisting}[language=C++][xleftmargin=0pt]
 constexpr T const& expected<E,T>::operator *() const&;
-constexpr T& expected<E,T>::operator *() &;
-constexpr T&& expected<E,T>::operator *() &&;
+T& expected<E,T>::operator *() &;
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Requires}
@@ -2305,6 +2303,22 @@ constexpr T&& expected<E,T>::operator *() &&;
 \end{wordingTextItem}
 \begin{wordingTextItem}{Remarks}
 The first function shall be a \cpp{constexpr} function.
+\end{wordingTextItem}
+\end{wordingPara}
+
+% && operator*.
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
+constexpr T&& expected<E,T>::operator *() &&;
+\end{lstlisting}
+\begin{wordingPara}
+\begin{wordingTextItem}{Requires}
+\cpp{bool(*this)}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Returns}
+\cpp{move(val)}.
+\end{wordingTextItem}
+\begin{wordingTextItem}{Remarks}
+This function shall be a \cpp{constexpr} function.
 \end{wordingTextItem}
 \end{wordingPara}
 
@@ -2324,40 +2338,22 @@ This function shall be a \cpp{constexpr} function.
 % value accessor.
 \begin{lstlisting}[language=C++][xleftmargin=0pt]
 constexpr T const& expected<E,T>::value() const&;
-constexpr T& expected<E,T>::value() &;
-\end{lstlisting}
-\begin{wordingPara}
-\begin{wordingTextItem}{Returns}
-\cpp{val}, \cpp{if bool(*this)}.
-\end{wordingTextItem}
-\begin{wordingTextItem}{Throws}
-\begin{itemize}
-\item When \cpp{E} is \cpp{std::exception_ptr} as if \cpp{rethrow_exception(error())} if \cpp{!*this} 
-\item Otherwise \cpp{bad_expected_access(err)} if \cpp{!*this}.
-\end{itemize}
-
-\end{wordingTextItem}
-\begin{wordingTextItem}{Remarks}
-The first function shall be a \cpp{constexpr} function.
-\end{wordingTextItem}
-\end{wordingPara}
-
-% value accessor.
-\begin{lstlisting}[language=C++][xleftmargin=0pt]
+T& expected<E,T>::value() &;
 constexpr T&& expected<E,T>::value() &&;
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
-\cpp{move(val)}, \cpp{if bool(*this)}.
+\cpp{*val}, \cpp{if bool(*this)}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Throws}
 \begin{itemize}
 \item When \cpp{E} is \cpp{std::exception_ptr} as if \cpp{rethrow_exception(error())} if \cpp{!*this} 
 \item Otherwise \cpp{bad_expected_access(err)} if \cpp{!*this}.
 \end{itemize}
+
 \end{wordingTextItem}
 \begin{wordingTextItem}{Remarks}
-The first function shall be a \cpp{constexpr} function.
+The first and third functions shall be \cpp{constexpr} functions.
 \end{wordingTextItem}
 \end{wordingPara}
 
