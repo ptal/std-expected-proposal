@@ -1025,7 +1025,7 @@ The table \ref{comp-monads} presents a brief comparison between \cpp{optional<T>
 \hline
 \textbf{state} & bool()  &  bool() / valid & valid / ready / (has_value, see \cite{MoreAsync}) \\
 \hline
-\textbf{observers} & pointer-like / value / value_or & pointer-like / value / error / value_or / value_or_throw & get / (get_exception_ptr, see \cite{MoreAsync}) \\
+\textbf{observers} & pointer-like / value / value_or & pointer-like / value / error / value_or  & get / (get_exception_ptr, see \cite{MoreAsync}) \\
 \hline
 \textbf{visitation} & no & map / bind / then / catch_error  & then / (next/recover see \cite{MoreAsync}) \\
 \hline
@@ -1166,15 +1166,32 @@ template <class T, class Error, class Exception = bad_expected_access>
   struct expected;
 \end{lstlisting}
 
-the authors consider that this is not really needed and that this parameter should not really be part of the type. In addition \cpp{OPTIONAL}
+\noindent
+The authors consider that this is not really needed and that this parameter should not really be part of the type.
 
-The user can use \cpp{value_or_throw()} as
+The user could use \cpp{value_or_throw()} 
 
 \begin{lstlisting}
 std::experimental::expected<std::error_code, int> f();
 std::experimental::expected<std::error_code, int> e = f();
 auto i = e.value_or_throw<std::system_error>();  
 \end{lstlisting}
+
+\noindent
+where 
+
+\begin{lstlisting}
+template <class Exception, class E, class T>
+constexpr value_type value_or_throw(expected<E,T>& e) const&
+{
+  return *this
+    ? move(**this)
+    : throw Exception(e.error());
+}
+\end{lstlisting}
+
+\noindent
+A class like this one could be added to the standard, but this proposal doesn't request it. 
 
 The user can also wrap the proposed class in its own expected class
 
@@ -1191,6 +1208,7 @@ struct MyExpected {
 };
 \end{lstlisting}
 
+\noindent
 and use it as
 
 \begin{lstlisting}
@@ -1199,6 +1217,7 @@ MyExpected<int> e = f();
 auto i = e.value();  // std::system_error throw if not valid
 \end{lstlisting}
 
+\noindent
 A class like this one could be added to the standard, but this proposal doesn't request it. 
 
 An alternative could be to add a specialization on a error class that gives the storage and the exception to thrown.
@@ -1210,6 +1229,9 @@ template <class Error, class Exception>
     typedef Exception exception_type;
   };
 \end{lstlisting}
+
+\noindent
+that could be used as follows
 
 \begin{lstlisting}
 std::experimental::expected<std::error_exception<std::error_code, std::system_error>, T> e = make_unexpected(err);
@@ -1244,10 +1266,10 @@ Should \cpp{expected<exception_ptr,T>} be equality comparable using shallow comp
 Currently \cpp{expected<E,T>} and \cpp{expected<exception_ptr,T>} don't compare its values in the same way.
 Should \cpp{expected<E,T>} make all the unexpected values equal as it does \cpp{expected<exception_ptr,T>}?
 
-\subsection{Should \cpp{expected<errc,T>} and \cpp{expected<exception_ptr,T>} be represented by two different classes?}
+\subsection{Should \cpp{expected<E,T>} and \cpp{expected<exception_ptr,T>} be represented by two different classes?}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-As the behavior of \cpp{expected<errc,T>} and \cpp{expected<exception_ptr,T>} differs in a lot of points (at least currently), should \cpp{expected<E,T>} and \cpp{expected<exception_ptr,T>} be represented by two different classes?
+As the behavior of \cpp{expected<E,T>} and \cpp{expected<exception_ptr,T>} differs in a lot of points (at least currently), should \cpp{expected<E,T>} and \cpp{expected<exception_ptr,T>} be represented by two different classes?
 
 \subsection{Should \cpp{expected<E,T>} throw \cpp{E} instead of \cpp{bad_expected_access<E>}?}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1255,14 +1277,13 @@ As the behavior of \cpp{expected<errc,T>} and \cpp{expected<exception_ptr,T>} di
 As any type can be thrown as an exception, should \cpp{expected<E,T>} throw \cpp{E} instead of \cpp{bad_expected_access<E>}? 
 If yes, should \cpp{optional<T>} throw \cpp{nullopt_t} to be coherent? 
 
-
-\subsection{Should \cpp{expected<E,T>} be convertible from \cpp{E} when \cpp{E} it is not convertible to \cpp{T}}?
+\subsection{Should \cpp{expected<E,T>} be convertible from \cpp{E} when \cpp{E} it is not convertible to \cpp{T}?}
 
 The implicit conversion from \cpp{E} has been forbidden to avoid ambiguity when \cpp{E} and \cpp{T} are the same type. 
 However when \cpp{E} it is not convertible to \cpp{T} there wouldn't any ambiguity. 
 Should the implicit conversion be allowed in this case?
 
-\subsection{Should a specific exception be thrown when the \cpp{expected<exception_ptr,T>} does have a value neither an exception stored?}
+\subsection{Should a specific exception be thrown when the \cpp{expected<exception_ptr,T>} doesn't have a value neither an exception stored?}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 The following call in (1) is undefined behavior. Should a specific exception be thrown?
@@ -1294,6 +1315,7 @@ The original class was defined just in this way \cpp{expected<T,E>}. We moved to
 auto e  = expected<error_condition>::make(1) // result is expected<error_condition, int>
 \end{lstlisting}
 
+\noindent
 We can comeback to the original design. However we need to remove this \cpp{expected<E>::make(T)} function. 
 
 We could add it on a specific type constructor \cpp{expected_tc} (a better name of course)
@@ -1301,7 +1323,6 @@ We could add it on a specific type constructor \cpp{expected_tc} (a better name 
 \begin{lstlisting}
 auto e  = expected_tc<error_condition>::make(1) // result would be expected<int, error_condition>.
 \end{lstlisting}
-
 
 \subsection{Do we need a  \cpp{expected<E,T>::error_or} function?}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1314,6 +1335,7 @@ It has been argued that the error should be always available and that often ther
 struct { E; optional<T> }. 
 \end{lstlisting}
 
+\noindent
 The following code was show as use case
 
 \begin{lstlisting}
@@ -1325,9 +1347,8 @@ switch (e.status()) {
 } 
 \end{lstlisting}
 
+\noindent
 With the current interface the user could be tempted to do
-
-As it stands, I think the code would have to be:
 
 \begin{lstlisting}
 auto e = function();
@@ -1341,6 +1362,7 @@ if (e) {
 } 
 \end{lstlisting}
 
+\noindent
 This could be done with the current interface as follows
 
 \begin{lstlisting}
@@ -1352,6 +1374,7 @@ switch (error_or(e, success)) {
 } 
 \end{lstlisting}
 
+\noindent
 where
 
 \begin{lstlisting}
@@ -1362,12 +1385,13 @@ E error_or(expected<E,T> const&, E err) {
 }
 \end{lstlisting}
 
+\noindent
 Do we need to add such a \cpp{error_or} function? as member? 
 
 \subsection{Do we need a  \cpp{expected<E,T>::has_error} function?}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-More relevant might be exponential backoff, which would look much uglier if you had to test for whether or not there was a status.
+An other use case which could look much uglier is if the user had to test for whether or not there was a status.
 
 \begin{lstlisting}
   e = function();
@@ -1377,6 +1401,7 @@ More relevant might be exponential backoff, which would look much uglier if you 
   }
 \end{lstlisting}
 
+\noindent
 Here we have a value or a hard error.  
 This use case would need to use something like \cpp{has_error}
 
@@ -1388,6 +1413,7 @@ This use case would need to use something like \cpp{has_error}
   }
 \end{lstlisting}
 
+\noindent
 where
 
 \begin{lstlisting}
@@ -1761,9 +1787,6 @@ An instance of \cpp{expected<E,T>} is said to be unexpected if it contains an ob
     template <class U> constexpr T value_or(U&&) const&;
     template <class U> T value_or(U&&) &&;
     
-    template <class G> constexpr T value_or_throw() const&;
-    template <class G> T value_or_throw() &&;
-
     template constexpr 'see below' unwrap() const&;
     template 'see below' unwrap() &&;
 
@@ -2434,59 +2457,6 @@ T expected<E,T>::value_or(U&& v) &&;
 If \cpp{has_value} and exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{has_value} and \cpp{v} remains unchanged and the state of \cpp{val} is determined by the exception safety guarantee of the \cpp{T}'s constructor. Otherwise, when exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{*this} remains unchanged and the state of \cpp{v} is determined by the exception safety guarantee of the selected constructor of \cpp{T}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Throws}
-Any exception thrown by the selected constructor of \cpp{T}.
-\end{wordingTextItem}
-\begin{wordingTextItem}{Remarks}
-The function shall not participate in overload resolution unless: \\
-\cpp{is_move_constructible<T>::value} and \\
-\cpp{is_convertible<U&&, T>::value}.
-\end{wordingTextItem}
-\end{wordingPara}
-
-% value_or_throw.
-\begin{lstlisting}[language=C++][xleftmargin=0pt]
-template <class G>
-constexpr T expected<E,T>::value_or_throw() const&; 
-\end{lstlisting}
-\begin{wordingPara}
-\begin{wordingTextItem}{Returns}
-If \cpp{bool(*this)} then \cpp{**this}.
-\end{wordingTextItem}
-\begin{wordingTextItem}{Exception Safety}
-If \cpp{has_value} and exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{has_value} remains unchanged and the state of \cpp{val} is determined by the exception safety guarantee of the selected constructor of \cpp{T}. Otherwise, when exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{*this} remains unchanged.
-\end{wordingTextItem}
-\begin{wordingTextItem}{Throws}
-If \cpp{! *this} then \cpp{G(error())}.
-
-\noindent
-Any exception thrown by the selected constructor of \cpp{T}.
-\end{wordingTextItem}
-\begin{wordingTextItem}{Remarks}
-If both constructors of \cpp{T} which could be selected are \cpp{constexpr} constructors, this function shall be a \cpp{constexpr} function.
-\end{wordingTextItem}
-\begin{wordingTextItem}{Remarks}
-The function shall not participate in overload resolution unless: \\
-\cpp{is_copy_constructible<T>::value} and \\
-\cpp{is_convertible<U&&, T>::value}.
-\end{wordingTextItem}
-\end{wordingPara}
-
-% move value_or_throw.
-\begin{lstlisting}[language=C++][xleftmargin=0pt]
-template <class G>
-T expected<E,T>::value_or_throw() &&; 
-\end{lstlisting}
-\begin{wordingPara}
-\begin{wordingTextItem}{Returns}
-If \cpp{bool(*this)} then \cpp{std::move(**this)}.
-\end{wordingTextItem}
-\begin{wordingTextItem}{Exception Safety}
-If \cpp{has_value} and exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{has_value} remains unchanged and the state of \cpp{val} is determined by the exception safety guarantee of the \cpp{T}'s constructor. Otherwise, when exception is thrown during the call to \cpp{T}'s constructor, the value of \cpp{*this} remains unchanged.
-\end{wordingTextItem}
-\begin{wordingTextItem}{Throws}
-If \cpp{! *this} then \cpp{G(error())}.
-
-\noindent
 Any exception thrown by the selected constructor of \cpp{T}.
 \end{wordingTextItem}
 \begin{wordingTextItem}{Remarks}
