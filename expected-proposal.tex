@@ -757,162 +757,100 @@ This proposal doesn't include expected references as \cpp{optional}\cite{Optiona
 
 While it could seem weird to instantiate optional with \cpp{void}, it has more sense for expected as it conveys in addition, as \cpp{future<T>}, an error state.
 
-\subsection{Literals}
-
-\subsubsection{Making \cpp{expected} a literal type}
+\subsection{Making \cpp{expected} a literal type}
 %%%%%%%%%%%%%%%%%%
 
-We propose that \cpp{expected<E,T>} be a literal type for trivially destructible \cpp{T}'s and \cpp{E}'s.
+In \cite{OptionalRev4}, they propose to make \cpp{optional} a literal type, the same reasoning can be applied to \cpp{expected}. Under some conditions, such that \cpp{T} and \cpp{E} are trivially destructible, and the same described for \cpp{optional}, we propose that \cpp{expected} be a literal type.
 
-\begin{lstlisting}
-constexpr expected<int, int> ei{5};
-static_assert(ei, "");            // ok
-static_assert(ei == ei, "");      // ok
-int array[*ei];                   // ok: array of size 5 
-\end{lstlisting}
-
-Making \cpp{expected<E,T>} a literal-type in general is impossible: the destructor cannot be trivial because it has to execute an operation that can be conceptually described as:
-
-~expected() {
-  if (valid()) destroy_contained_value();
-  else destroy_contained_error();
-}
-
-It is still possible to make the destructor trivial for \cpp{T}'s and \cpp{E}'s which provide a trivial destructor themselves, and we know an efficient implementation of such  \cpp{expected<E,T>}  with compile-time interface ? except for copy constructor and move constructor ? is possible. Therefore we propose that for trivially destructible \cpp{T}'s and \cpp{E}'s all \cpp{expected<E,T>}'s constructors, except for move and copy constructors, as well as observer functions are constexpr. The sketch of reference implementation is provided in \cite{boost.expected}.
-
-We need to make a similar exception for \cpp{operator->} for types with overloaded \cpp{operator&}. The common pattern in the library is to use function \cpp{addressof} to avoid the surprise of overloaded \cpp{operator&}. However, we know of no way to implement constexpr version of function template addressof. The best approach we can take is to require that for normal types the non-overloaded (and constexpr) \cpp{operator&} is used to take the address of the contained value, and for the tricky types, implementations can use the normal (non-constexpr) \cpp{addressof}. 
-
-\subsubsection{Moved from state}
+\subsection{Moved from state}
 %%%%%%%%%%%%%%%%%%
 
-When a valued expected object is moved from (i.e., when it is the source object of move constructor or move assignment) its state does not change. When a valued object is moved from, we move the contained value, but leave the expected object valued. A moved-from contained value is still valid (although possibly not specified), so it is fine to consider such expected object valued. An alternative approach would be to destroy the contained value and make the moved-from optional object unvalid. However, we do not propose this for performance reasons.
-
-In contexts, like returning by value, where you need to call the destructor the second after the move, it does not matter, but in cases where you request the move explicitly and intend to assign a new value in the next step, and if \cpp{T} does not provide an efficient move, the chosen approach saves an unnecessary destructor and constructor call:
-
-\begin{lstlisting}
-expected<errc,array<Big, 1000>> eo = ... // array doesn't have efficient move
-ep = std::move(eo);
-eo = std::move(tmp);
-\end{lstlisting}
-
-The following is an even more compelling reason. In this proposal \cpp{expected<int,int>} is allowed to be implemented as a TriviallyCopyable type. Therefore, the copy constructor of type \cpp{std::array<expected<int,int>, 1000>} can be implemented using \cpp{memcpy}. With the additional requirement that expected's move constructor should not be trivial, we would be preventing the described optimization.
-
-The fact that the moved-from expected is not invalid may look "uncomfortable" at first, but this is an invalid expectation. The requirements of library components expressed in 17.6.5.15 (moved-from state of library types) only require that moved-from objects are in a valid but unspecified state. We do not need to guarantee anything above this minimum.
+We follow the approach taken in \cpp{optional}\cite{OptionalRev4}. Moving \cpp{expected<E,T>} do not modify the state (valued or erroneous) of \cpp{expected} and the move semantics is up to \cpp{T} or \cpp{E}.
 
 \subsection{Expected traits}
 \label{expected-traits-rational}
 
-\subsection{Other}
-
-\subsubsection{IO operations}
+\subsection{IO operations}
 %%%%%%%%%%%%%%%%%%
 
-The proposed interface for expected values does not contain IO operations: \cpp{operator<<} and \cpp{operator>>}. While we believe that they would be a useful addition to the interface of expected objects, we also observe that there are some technical obstacles in providing them, and we choose not to propose them at this time. Library components like optional, containers, pairs, tuples face the same issue. At present IO operations are not provided for these types. Our preference for \cpp{expected} is to provide an IO solution compatible with this for optional, containers, pairs and tuples, therefore at this point we refrain from proposing a solution for \cpp{expected} alone.
-
-
-\subsubsection{Function \cpp{make_expected}}
-%%%%%%%%%%%%%%%%%%
+For the same reasons than \cpp{optional}\cite{OptionalRev4} we do not add \cpp{operator<<} and \cpp{operator>>} IO operations.
 
 \subsection{Monadic operations}
 \label{monadic-operations}
 %%%%%%%%%%
 
-\cite{ImprovementsAsync} propose some improvements to \cpp{std::future<T>} that can be adapted to \cpp{expected<E,T>} naturally.
+A monadic interface is not optional if we don't want to fall back in the problems of the old "C return code". The example section \ref{divide-example} shows how these operations are important to expected. The member function \cpp{map} and \cpp{bind} find their roots in the category theory if we consider \cpp{expected} as a functor and a monad.
 
-\subsubsection{When ready}
-%%%%%%%%%%
+\subsubsection{Functor \cpp{map}}
 
-\cite{ImprovementsAsync} provides a \cpp{future<T>.then()} function that accepts a continuation having the future object as parameter. This continuation function is called when the future becomes ready. Been expected always ready this function is less useful. The single role would be to adapt the result of the continuation to the expected.
+The operation \cpp{map} consider expected as a functor and just apply a function on the contained value, if any. The types of the two overloads are presented using a functional notation and the \cpp{[]} represent a context in which the value T or U is contained. The current context is \cpp{expected} and thus \cpp{[T]} is equivalent to \cpp{expected<E,T>}.
 
-\subsubsection{When valued/unexpected}
-%%%%%%%%%%
+\begin{itemize}
+\item \cpp{(T -> U) -> [U]}
+\item \cpp{(T -> [U]) -> [[U]]}
+\end{itemize}
 
-In addition the \cpp{.then()} function that accepts a continuation having the expected object as parameter, the proposal includes two separated functions, one \cpp{.bind()} that applies when the expected object is valued and accepts a continuation having the underlying \cpp{value_type} as parameter. The other \cpp{.catch_error()} applies when the expected object is not valid and is used to try to recover from the error.  
+Whatever the return type of the continuation, we observe that it is always wrapped into a context. The monadic bind do it differently.
 
-\subsubsection{Continuation adaptors}
-%%%%%%%%%%
+\subsubsection{Monadic \cpp{bind}}
 
-An alternative to these specific functions could be to use the \cpp{.then()} function and have some adaptor \cpp{if_valued} and \cpp{if_unexpected} that do the adaptation.
+A monad is defined with a type constructor and two operations \cpp{return} and \cpp{bind}. The type constructor simply build a monad for a specific type, in the C++ jargon it is referred to template instantiation (we build \cpp{expected} from a type \cpp{Value} and \cpp{Error}).
 
-\begin{lstlisting}
-f.then(if_valued([](T v) {...}));
+The \cpp{return} operation wraps a value of type \cpp{T} inside a context \cpp{[T]}. In C++ we can consider the constructors as a \cpp{return} operation.
 
-f.then(if_unexpected([](E e) {...}));
-\end{lstlisting}
+Finally, the \cpp{bind} operation is similar to \cpp{map} but doesn't wrap the value if the function already wraps it up. The functional signature of \cpp{bind} can be described as follow:
 
-TBoost.Expected \cite{boost_expected} provides such a \cpp{.then} continuation adaptors, but this proposal doesn't include them.
+\begin{itemize}
+\item \cpp{(T -> U) -> [U]}
+\item \cpp{(T -> [U]) -> [U]}
+\end{itemize}
 
-\subsubsection{\cpp{value_or_call}}
-%%%%%%%%%%
+If a do-notation is introduced in C++, as proposed in section \ref{better-support-for-monad}, these operations can become a powerful abstraction, they have been proven very useful in Haskell. For example, a similar interface could be used with \cpp{optional}..
 
-As reported in \cite{OPTIONAL_R5} one  convenience function has been suggested. Sometimes the default value is not given, and computing it takes some time. We only want to compute it, when we know the optional object is disengaged:
+\subsubsection{\cpp{then} operation}
 
-\begin{lstlisting}
-expected<exception_ptr,int> ei = /* ... */;
+The last operation has no direct counterpart in functional language and is inspired from \cite{ImprovementsAsync} proposing some improvements to \cpp{std::future<T>}. The functional signature is as follow:
 
-if (ei) {
-  use(*ei);
-}
-else {
-  int i = painfully_compute_default();
-  use(i);
-}
-\end{lstlisting}
+\begin{itemize}
+\item \cpp{([T] -> U) -> [U]}
+\item \cpp{([T] -> [U]) -> [U]}
+\end{itemize}
 
-The solution to that situation would be another convenience function which rather than taking a default value takes a callable object that is capable of computing a default value if needed:
+It has the same wrapping strategy than \cpp{bind}: it doesn't wrap if the continuation already wraps it up.
 
-\begin{lstlisting}
-use( ei.value_or_call(&painfully_compute_default) );       
-// or
-use( ei.value_or_call([&]{return painfully_compute_default();} );
-\end{lstlisting}
+\subsubsection{Exception thrown in the continuation}
 
-This is quite close to the context of use of  \cpp{catch_error}, but the function called has no parameter. As there is an alternative using generic lambdas this proposal doesn't propose neither this function.
+Since we think \cpp{expected} will be mainly used as an alternative to exception, we provide a way to capture the exceptions thrown in these 3 functions. 
+
+Indeed, if an exception is thrown by the continuation, \cpp{traits_type::catch_exception(current_exception())} will be called. For example, if \cpp{E == std::exception_ptr}, the default trait will store it inside expected instead of letting the exception flight. It can be useful if we want to enforce a nothrow behavior when using the monadic operations.
+
+\subsubsection{\cpp{catch_error} operation}
+
+This last member function is used when we want to use or recover from an error. When chaining multiple \cpp{bind} or \cpp{map} operation we don't know if the operations have succeeded. A common way is thus to add a \cpp{catch_error} at the end and act in consequence.
 
 \begin{lstlisting}
-ei.catch_error([](auto){ return painfully_compute_default();}).bind(use);       
+getInt().map([](int i){return i * 2;})
+        .map(integer_divide_by_2)
+        .catch_error(log_error);
 \end{lstlisting}
 
-\subsubsection{When all ready}
-%%%%%%%%%%
-
- \cite{ImprovementsAsync} includes \cpp{when_all()/when_any()//when_any_swaped()} functions to group futures on a new specific future that will be ready under different circumstances. As \cpp{expected<E,T>} is always ready, these functions have no sense. If provided the result and the behavior would be the same for both, just group all the expected.  
- 
-\subsubsection{When all valued}
-%%%%%%%%%%
-
-However, there is yet a need to apply a function when all the expected are valued. The free function \cpp{map()} takes a variadic continuation and a variadic number of expected parameters. The type and number of the parameters must be compatible with the continuation arguments.
+Here the last operation is simply used to log the error but the \cpp{catch_error} also accepts function that try to recover from a previous error.
 
 \begin{lstlisting}
- expected<exception_ptr,int> sumFirstAndSecond5(istream_range& r)
-{
-  return map(plus, getInt(r), getInt(r));
-}
+getInt().map([](int i){return i * 2;})
+        .map(integer_divide_by_2)
+        .catch_error([](auto e) { return 0; });
 \end{lstlisting}
+\noindent
+This last example shows we can return a new value from the continuation passed to \cpp{catch_error}.
+\newline
 
-An alternative to this specific function if \cpp{when_all} is provided, could be to use the \cpp{.then()} function and have some adaptor \cpp{if_all_valued} that do the adaptation.
-
-\begin{lstlisting}
-expected<exception_ptr,int> sumFirstAndSecond5(istream_range& r)
-{
-  return when_all(getInt(r), getInt(r)).then(if_all_valued([](int i, int j) {...}));
-}
-\end{lstlisting}
-
-\subsubsection{When any valued}
-%%%%%%%%%%
-
-The authors don't have a concrete use case for a function that would be applied if any of the expected has a value other than looking for non-determinism.
-
-\subsubsection{\cpp{expected<E, expected<E,T>>}}
-%%%%%%%%%%
-
+The \cpp{catch_error} member doesn't catch exceptions that could be thrown by the continuation. Since we already try to recover from an error it makes little sense to prevent the user to launch an exception.
 
 \subsubsection{Function \cpp{unwrap}}
 %%%%%%%%%%
 
-In some scenarios, you might want to create an \cpp{expected} that returns another \cpp{expected}, resulting in nested expected. 
-It is possible to write simple code to unwrap the outer \cpp{expected} and retrieve the nested \cpp{expected} and its result with the current interface as in
+In some scenarios, you might want to create an \cpp{expected} that returns another \cpp{expected}, resulting in nested expected. It is possible to write simple code to unwrap the outer \cpp{expected} and retrieve the nested \cpp{expected} and its result with the current interface as in:
 
 \begin{lstlisting}
 template <class T, class E>
@@ -926,7 +864,7 @@ expected<E,T> unwrap<expected<E,T>> e) {
 }
 \end{lstlisting}
 
-We could add such a function to the standard, either as a free function or as a member function. The authors propose to add it as a member function to be inline with \cite{ImprovementsAsync}.
+We could add such a function to the standard, either as a free function or as a member function. The authors propose to add it as a member function to be in line with \cite{ImprovementsAsync}.
 
 \section{Related types}
 %%%%%%%%%%%
@@ -938,7 +876,7 @@ We could add such a function to the standard, either as a free function or as a 
 
 The table \ref{comp-variant} presents a brief comparison between \cpp{boost::variant<T, E>} and \cpp{expected<E,T>}.
 
-\begin{table}
+\begin{table}[h!]
 \bgroup
 \def\arraystretch{1.5}
 \begin{tabular}
