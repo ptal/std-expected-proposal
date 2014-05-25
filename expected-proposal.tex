@@ -765,7 +765,7 @@ In \cite{OptionalRev4}, they propose to make \cpp{optional} a literal type, the 
 \subsection{Moved from state}
 %%%%%%%%%%%%%%%%%%
 
-We follow the approach taken in \cpp{optional}\cite{OptionalRev4}. Moving \cpp{expected<E,T>} do not modify the state (valued or erroneous) of \cpp{expected} and the move semantics is up to \cpp{T} or \cpp{E}.
+We follow the approach taken in \cpp{optional}\cite{OptionalRev4}. Moving \cpp{expected<E,T>} do not modify the state of the source (valued or erroneous) of \cpp{expected} and the move semantics is up to \cpp{T} or \cpp{E}.
 
 \subsection{Expected traits}
 \label{expected-traits-rational}
@@ -1237,6 +1237,77 @@ It has been suggested also to extend the design into something that contains
 \end{itemize}
 
 Again there is no major difficulty to implement it, but instead of having one variation point we have two, that is, is there a value, and if not, if is there an exception_ptr. While this would need only an extra test on the exceptional case, the authors think that it is not worth doing it as all the copy/move/swap operations would be less efficient. 
+
+\subsection{Should \cpp{expected<exception_ptr,T>} be equality comparable?}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+This proposal doesn't make \cpp{expected<exception_ptr,T>} comparable as \cpp{exception_ptr} equality comparison is shallow and doesn't provides relational operators.
+
+Should \cpp{expected<exception_ptr,T>} be equality comparable using shallow comparision?
+
+\subsection{Should \cpp{expected<E,T>} make all the unexpected values equal?}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Currently \cpp{expected<E,T>} and \cpp{expected<exception_ptr,T>} don't compare its values in the same way.
+Should \cpp{expected<E,T>} make all the unexpected values equal as it does \cpp{expected<exception_ptr,T>}?
+
+\subsection{Should \cpp{expected<errc,T>} and \cpp{expected<exception_ptr,T>} be represented by two different classes?}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+As the behavior of \cpp{expected<errc,T>} and \cpp{expected<exception_ptr,T>} differs in a lot of points (at least currently), should \cpp{expected<E,T>} and \cpp{expected<exception_ptr,T>} be represented by two different classes?
+
+\subsection{Should \cpp{expected<E,T>} throw \cpp{E} instead of \cpp{bad_expected_access<E>}?}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+As any type can be thrown as an exception, should \cpp{expected<E,T>} throw \cpp{E} instead of \cpp{bad_expected_access<E>}? 
+If yes, should \cpp{optional<T>} throw \cpp{nullopt_t} to be coherent? 
+
+
+\subsection{Should \cpp{expected<E,T>} be convertible from \cpp{E} when \cpp{E} it is not convertible to \cpp{T}}?
+
+The implicit conversion from \cpp{E} has been forbidden to avoid ambiguity when \cpp{E} and \cpp{T} are the same type. 
+However when \cpp{E} it is not convertible to \cpp{T} there wouldn't any ambiguity. 
+Should the implicit conversion be allowed in this case?
+
+\subsection{Should a specific exception be thrown when the \cpp{expected<exception_ptr,T>} does have a value neither an exception stored?}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+The following call in (1) is undefined behavior. Should a specific exception be thrown?
+
+\begin{lstlisting}
+expected<exception_pre,int> e;
+e.value(); // (1)
+\end{lstlisting}
+
+\subsection{Should \cpp{map}/\cpp{bind}/\cpp{then} catch the exceptions throw by the continuation?}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+It is easy to catch the exceptions when the type is \cpp{expected<exception_ptr,T>}. However, doing it for \cpp{expected<E,T>} needs a conversion from the current exception and the error E.
+
+This proposal requires that the continuation doesn't throw exceptions as we don't have a general solution.
+
+Should  \cpp{expected<exception_ptr,T>::map/bind/then} catch the exceptions and propagate them on the result?
+
+Should  \cpp{expected<E,T>::map/bind/then} catch the exceptions and propagate them on the result by doing a transfermation from the exception to the error? If yes, how to configure it?
+
+\subsection{Should the order of parameters be reversed \cpp{expected<T,E>} instead of \cpp{expected<E,T>}?}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+It has been argued that the name of the class \cpp{expected} would need as first parameter the value type and not the error type.
+
+The original class was defined just in this way \cpp{expected<T,E>}. We moved to the current \cpp{expected<E,T>} form to be able to write
+
+\begin{lstlisting}
+auto e  = expected<error_condition>::make(1) // result is expected<error_condition, int>
+\end{lstlisting}
+
+We can comeback to the original design. However we need to remove this \cpp{expected<E>::make(T)} function. 
+
+We could add it on a specific type constructor \cpp{expected_tc} (a better name of course)
+
+\begin{lstlisting}
+auto e  = expected_tc<error_condition>::make(1) // result would be expected<int, error_condition>.
+\end{lstlisting}
 
 %%%%%%%%%%%%%%
 \section{Proposed Wording}
@@ -2507,6 +2578,7 @@ otherwise, returns \cpp{*this}.
 \begin{lstlisting}
   template <class E>
   class expected<E, holder>
+  {
   public:
     template <class T>
     using type = expected<E,T>
