@@ -142,7 +142,7 @@
 \section{Introduction}
 %%%%%%%%%%%
 
-Class template \\cpp{expected<T,E>} proposed here is a type that may contain a value of type \cpp{T} or a value of type \cpp{E} in its storage space. \cpp{T} represents the expected value, \cpp{E} represents the reason explaining why it doesn't contains a value of type \cpp{T}, that is the unexpected value. Its interface allows to query if the underlying value is either the expected value (of type \cpp{T}) or an unexpected value (of type \cpp{E}). The original idea comes from Andrei Alexandrescu C++ and Beyond 2012: Systematic Error Handling in C++ talk \cite{AlexandrescuExpected}. The interface and the rational are based on \cpp{std::optional} N3793 \cite{OptionalRev5} and Haskell monads. We can consider that \cpp{expected<T,E>} is a generalization of \cpp{optional<T>} providing in addition a monad interface and some specific functions associated to the unexpected type \cpp{E}. It requires no changes to core language, and breaks no existing code.
+Class template \cpp{expected<T,E>} proposed here is a type that may contain a value of type \cpp{T} or a value of type \cpp{E} in its storage space. \cpp{T} represents the expected value, \cpp{E} represents the reason explaining why it doesn't contains a value of type \cpp{T}, that is the unexpected value. Its interface allows to query if the underlying value is either the expected value (of type \cpp{T}) or an unexpected value (of type \cpp{E}). The original idea comes from Andrei Alexandrescu C++ and Beyond 2012: Systematic Error Handling in C++ talk \cite{AlexandrescuExpected}. The interface and the rational are based on \cpp{std::optional} N3793 \cite{OptionalRev5} and Haskell monads. We can consider that \cpp{expected<T,E>} is a generalization of \cpp{optional<T>} providing in addition a monad interface and some specific functions associated to the unexpected type \cpp{E}. It requires no changes to core language, and breaks no existing code.
 
 \section{Motivation and Scope}
 \label{motiv-scope}
@@ -227,7 +227,7 @@ double safe_divide(double i, double j)
 }
 \end{lstlisting}
 
-With \\cpp{expected<T,E>}, we are not required to use exceptions, we can use \cpp{std::error_condition} which is easier to introspect than \cpp{std::exception_ptr} if we want to use the error. For the purpose of this example, we use the following enumeration (the boilerplate code concerning \cpp{std::error_condition} is not shown):
+With \cpp{expected<T,E>}, we are not required to use exceptions, we can use \cpp{std::error_condition} which is easier to introspect than \cpp{std::exception_ptr} if we want to use the error. For the purpose of this example, we use the following enumeration (the boilerplate code concerning \cpp{std::error_condition} is not shown):
 
 \begin{lstlisting}
 enum class arithmetic_errc
@@ -248,7 +248,7 @@ expected<double,error_condition> safe_divide(double i, double j)
 \}
 \end{alltt}
 
-(1) The implicit conversion from \cpp{unexpected_type<E>} to \\cpp{expected<T,E>} and (2) from \cpp{T} to \\cpp{expected<T,E>} prevents using too much boilerplate code. The advantages are that we have a clean way to fail without using the exception machinery, and we can give precise information about why it failed as well. The liability is that this function is going to be tedious to use. For instance, the exception-based function $i + j/k$ is:
+(1) The implicit conversion from \cpp{unexpected_type<E>} to \cpp{expected<T,E>} and (2) from \cpp{T} to \cpp{expected<T,E>} prevents using too much boilerplate code. The advantages are that we have a clean way to fail without using the exception machinery, and we can give precise information about why it failed as well. The liability is that this function is going to be tedious to use. For instance, the exception-based function $i + j/k$ is:
 
 \begin{lstlisting}
 double f1(double i, double j, double k)
@@ -270,7 +270,7 @@ expected<double, error_condition> f1(double i, double j, double k)
 \end{alltt}
 
 \noindent
-This example clearly doesn't respect the ``clean code'' characteristic introduced in section \ref{motiv-scope} and the readability doesn't differ much from the ``C return code''. Hopefully, we can see \\cpp{expected<T,E>} through functional glasses as a monad. The code is cleaner using the member function \cpp{map}. This way, the error handling is not explicitly mentioned but we still know, thanks to the call to \cpp{map}, that something is going underneath and thus it is not as silent as exception.
+This example clearly doesn't respect the ``clean code'' characteristic introduced in section \ref{motiv-scope} and the readability doesn't differ much from the ``C return code''. Hopefully, we can see \cpp{expected<T,E>} through functional glasses as a monad. The code is cleaner using the member function \cpp{map}. This way, the error handling is not explicitly mentioned but we still know, thanks to the call to \cpp{map}, that something is going underneath and thus it is not as silent as exception.
 
 \begin{alltt}
 expected<double, error_condition> f1(double i, double j, double k)
@@ -311,7 +311,7 @@ int f2(int i, int j, int k)
 \end{lstlisting}
 
 \noindent
-Now let's write this code using an \\cpp{expected<T,E>} type and the functional \cpp{map} already used previously.
+Now let's write this code using an \cpp{expected<T,E>} type and the functional \cpp{map} already used previously.
 
 \begin{alltt}
 expected<int,error_condition> f(int i, int j, int k)
@@ -342,7 +342,7 @@ The error-handling code has completely disappeared but the lambda functions are 
 \subsection{Error retrieval and correction}
 %%%%%%%%%%%%%%%%
 
-The major advantage of \\cpp{expected<T,E>} over \cpp{optional<T>} is the ability to transport an error, but we didn't come yet to an example that retrieve the error. First of all, we should wonder what a programmer do when a function call returns an error:
+The major advantage of \cpp{expected<T,E>} over \cpp{optional<T>} is the ability to transport an error, but we didn't come yet to an example that retrieve the error. First of all, we should wonder what a programmer do when a function call returns an error:
 
 \begin{enumerate}
  \item Ignore it.
@@ -391,16 +391,16 @@ These changes are entirely based on library extensions and do not require any la
 \section{Design rationale}
 %%%%%%%%%%%%%
 
-The same rationale described in \cite{OptionalRev4} for \cpp{optional<T>} applies to \\cpp{expected<T,E>} and \cpp{expected<T, nullopt_t>} should behave as \cpp{optional<T>}.  That is, we see \cpp{expected<T,E>} as \cpp{optional<T>} for which all the values of \cpp{E} collapse into a single value \cpp{nullopt}. In the following sections we present the specificities of the rationale in \cite{OptionalRev4} applied to  \\cpp{expected<T,E>}.
+The same rationale described in \cite{OptionalRev4} for \cpp{optional<T>} applies to \cpp{expected<T,E>} and \cpp{expected<T, nullopt_t>} should behave as \cpp{optional<T>}.  That is, we see \cpp{expected<T,E>} as \cpp{optional<T>} for which all the values of \cpp{E} collapse into a single value \cpp{nullopt}. In the following sections we present the specificities of the rationale in \cite{OptionalRev4} applied to  \cpp{expected<T,E>}.
 
-\subsection{Conceptual model of \\cpp{expected<T,E>}}
+\subsection{Conceptual model of \cpp{expected<T,E>}}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\cpp{expected<T,E>} models a discriminated union of types \cpp{T} and \cpp{unexpected_type<E>}. \\cpp{expected<T,E>} is viewed as a value of type \cpp{T} or value of type \cpp{unexpected_type<E>}, allocated in the same storage, along with the way of determining which of the two it is. 
+\cpp{expected<T,E>} models a discriminated union of types \cpp{T} and \cpp{unexpected_type<E>}. \cpp{expected<T,E>} is viewed as a value of type \cpp{T} or value of type \cpp{unexpected_type<E>}, allocated in the same storage, along with the way of determining which of the two it is. 
 
 The interface in this model requires operations such as comparison to \cpp{T}, comparison to \cpp{E}, assignment and creation from either. It is easy to determine what the value of the expected object is in this model: the type it stores (\cpp{T} or \cpp{E}) and either the value of \cpp{T} or the value of \cpp{E}. 
 
-Additionally, within the affordable limits, we propose the view that \\cpp{expected<T,E>} extends the set of the values of \cpp{T} by the values of type \cpp{E}. This is reflected in initialization, assignment, ordering, and equality comparison with both \cpp{T} and \cpp{E}. In the case of  \cpp{optional<T>}, \cpp{T} can not be a \cpp{nullopt_t}. As the types \cpp{T} and \cpp{E} could be the same in \\cpp{expected<T,E>}, there is need to tag the values of \cpp{E} to avoid ambiguous expressions. The \cpp{make_unexpected(E)} function is proposed for this purpose. However \cpp{T} can not be  \cpp{unexpected_type<E>} for a given \cpp{E}.
+Additionally, within the affordable limits, we propose the view that \cpp{expected<T,E>} extends the set of the values of \cpp{T} by the values of type \cpp{E}. This is reflected in initialization, assignment, ordering, and equality comparison with both \cpp{T} and \cpp{E}. In the case of  \cpp{optional<T>}, \cpp{T} can not be a \cpp{nullopt_t}. As the types \cpp{T} and \cpp{E} could be the same in \cpp{expected<T,E>}, there is need to tag the values of \cpp{E} to avoid ambiguous expressions. The \cpp{make_unexpected(E)} function is proposed for this purpose. However \cpp{T} can not be  \cpp{unexpected_type<E>} for a given \cpp{E}.
 
 \begin{alltt}
 expected<int, string> ei = 0;
@@ -416,10 +416,10 @@ ej = 0;
 ek = 1;
 \end{alltt}
 
-\subsection{Initialization of \\cpp{expected<T,E>}}
+\subsection{Initialization of \cpp{expected<T,E>}}
 %%%%%%%%%%%%%%%%%%%%%%%
 an
-In cases \cpp{T} and \cpp{E} are value semantic types capable of storing \cpp{n} and \cpp{m} distinct values respectively, \\cpp{expected<T,E>} can be seen as an extended \cpp{T} capable of storing \cpp{n + m} values: these that \cpp{T} and \cpp{E} stores. Any valid initialization scheme must provide a way to put an expected object to any of these states. In addition, some \cpp{T}'s  are not \cpp{CopyConstructible} and their expected variants still should be constructible with any set of arguments that work for \cpp{T}.
+In cases \cpp{T} and \cpp{E} are value semantic types capable of storing \cpp{n} and \cpp{m} distinct values respectively, \cpp{expected<T,E>} can be seen as an extended \cpp{T} capable of storing \cpp{n + m} values: these that \cpp{T} and \cpp{E} stores. Any valid initialization scheme must provide a way to put an expected object to any of these states. In addition, some \cpp{T}'s  are not \cpp{CopyConstructible} and their expected variants still should be constructible with any set of arguments that work for \cpp{T}.
 
 \noindent
 As in \cite{OptionalRev4}, the model retained is to initialize either by providing an already constructed \cpp{T} or a tagged \cpp{E}. The default constructor required \cpp{E} to be default-constructible (which is more likely to happen than \cpp{T}).
@@ -467,12 +467,12 @@ expected<int, string> ej\{unexpect, "arg"\};  // unexpected value, calls string\
 An alternative name for \cpp{in_place} that is coherent with \cpp{unexpect} could be \cpp{expect}. Being compatible with \cpp{optional<T>} seems more important. So this proposal doesn't propose such a \cpp{expect} tag.
 \newline
 
-The alternative and also comprehensive initialization approach, which is not compatible with the default construction of \\cpp{expected<T,E>} to \cpp{E()}, could have been a variadic perfect forwarding constructor that just forwards any set of arguments to the constructor of the contained object of type \cpp{T}. 
+The alternative and also comprehensive initialization approach, which is not compatible with the default construction of \cpp{expected<T,E>} to \cpp{E()}, could have been a variadic perfect forwarding constructor that just forwards any set of arguments to the constructor of the contained object of type \cpp{T}. 
 
 \subsection{Almost never-empty guaranty}
 %%%%%%%%%%%%%%%%%%
 
-As \cpp{boost::variant<unexpected_type<E>,T>}, \\cpp{expected<T,E>} ensures that it is never empty. All instances \cpp{v} of type \\cpp{expected<T,E>} guarantee that \cpp{v} has constructed content of one of the types \cpp{T} or \cpp{E}, even if an operation on \cpp{v} has previously failed.
+As \cpp{boost::variant<unexpected_type<E>,T>}, \cpp{expected<T,E>} ensures that it is never empty. All instances \cpp{v} of type \cpp{expected<T,E>} guarantee that \cpp{v} has constructed content of one of the types \cpp{T} or \cpp{E}, even if an operation on \cpp{v} has previously failed.
 
 This implies that expected may be viewed precisely as a union of exactly its bounded types. This ``never-empty'' property insulates the user from the possibility of undefined expected content and the significant additional complexity-of-use attendant with such a possibility.
 
@@ -488,25 +488,25 @@ Similar data structure includes \cpp{optional<T>}, \lstinline[mathescape]{varian
 \end{itemize}
 
 \noindent
-It raises several questions about \\cpp{expected<T,E>}:
+It raises several questions about \cpp{expected<T,E>}:
 
 \begin{itemize}
-\item Should the default constructor of \\cpp{expected<T,E>} behave like \cpp{variant<T,E>} or as \cpp{variant<E,T>}?
-\item Should the default constructor of \\cpp{expected<T,E>} behave like \cpp{optional<variant<T,E>>}?
-\item Should the default constructor of \cpp{expected<nullopt_t,T>} behave like \cpp{optional<T>}? If yes, how should behave the default constructor of \\cpp{expected<T,E>}? As if initialized with \cpp{make_unexpected(E())}? This would be equivalent to the initialization of \cpp{variant<E,T>}.
-\item Should \\cpp{expected<T,E>} provide a default constructor at all? \cite{OptionalRev3} presents valid arguments against this approach, e.g. \cpp{array<expected<T,E>>} would not be possible. 
+\item Should the default constructor of \cpp{expected<T,E>} behave like \cpp{variant<T,E>} or as \cpp{variant<E,T>}?
+\item Should the default constructor of \cpp{expected<T,E>} behave like \cpp{optional<variant<T,E>>}?
+\item Should the default constructor of \cpp{expected<nullopt_t,T>} behave like \cpp{optional<T>}? If yes, how should behave the default constructor of \cpp{expected<T,E>}? As if initialized with \cpp{make_unexpected(E())}? This would be equivalent to the initialization of \cpp{variant<E,T>}.
+\item Should \cpp{expected<T,E>} provide a default constructor at all? \cite{OptionalRev3} presents valid arguments against this approach, e.g. \cpp{array<expected<T,E>>} would not be possible. 
 \end{itemize}
 
 Requiring \cpp{E} to be default constructible seems less constraining than requiring \cpp{T} to be default constructible (e.g. consider the \cpp{Date} example in \cite{OptionalRev3}). With the same semantics \cpp{expected<Date,E>} would be \cpp{Regular} with a meaningful not-a-date state created by default.
 
 There is still a minor issue as the default constructor of \cpp{std::exception_ptr} doesn't contains an exception and so getting the value of a default constructed \cpp{expected<T>} would need to check if the stored \cpp{std::exception_ptr} is equal to \cpp{std::exception_ptr()} and throw a specific exception.
 
-The authors consider the arguments in  \cite{OptionalRev3} valid and so propose that \\cpp{expected<T,E>} default constructor should behave as constructed with \cpp{make_unexpected(E())}.
+The authors consider the arguments in  \cite{OptionalRev3} valid and so propose that \cpp{expected<T,E>} default constructor should behave as constructed with \cpp{make_unexpected(E())}.
 
 \subsubsection{Conversion from \cpp{T}}
 %%%%%%%%%%%%%%%%%%
 
-An object of type \cpp{T} is convertible to an expected object of type \\cpp{expected<T,E>}:
+An object of type \cpp{T} is convertible to an expected object of type \cpp{expected<T,E>}:
 
 \begin{alltt}
 expected<int, error_condition> ei = 1; // works
@@ -528,7 +528,7 @@ auto ej = make_expected(1);
 \subsubsection{Conversion from \cpp{E}}
 %%%%%%%%%%%%%%%%%%
 
-An object of type \cpp{E} is not convertible to an unexpected object of type \\cpp{expected<T,E>} since \cpp{E} and \cpp{T} can be of the same type. The proposed interface uses a special tag \cpp{unexpect} and a special non-member \cpp{make_unexpected} function to indicate an unexpected state for \\cpp{expected<T,E>}. It is used for construction and assignment. This might rise a couple of objections. First, this duplication is not strictly necessary because you can achieve the same effect by using the \cpp{unexpect} tagged forwarding constructor:
+An object of type \cpp{E} is not convertible to an unexpected object of type \cpp{expected<T,E>} since \cpp{E} and \cpp{T} can be of the same type. The proposed interface uses a special tag \cpp{unexpect} and a special non-member \cpp{make_unexpected} function to indicate an unexpected state for \cpp{expected<T,E>}. It is used for construction and assignment. This might rise a couple of objections. First, this duplication is not strictly necessary because you can achieve the same effect by using the \cpp{unexpect} tagged forwarding constructor:
 
 \begin{alltt}
 expected<string, int> exp1 = make_unexpected(1); 
@@ -555,7 +555,7 @@ expected<vector<int>, int> get3() \{
 \}
 \end{alltt}
 
-The usage of \cpp{make_unexpected} is also a consequence of the adapted model for expected: a discriminated union of \cpp{T} and \cpp{unexpected_type<E>}. While \cpp{make_unexpected(E)} has been chosen because it clearly indicates that we are interested in creating an unexpected \\cpp{expected<T,E>} (of unspecified type \cpp{T}), it could be also used to make a ready future with a specific error, but this is outside the scope of this proposal. Note also that the definition of the result type of \cpp{make_unexpected} has an explicitly deleted default constructor. This is in order to enable the reset idiom \cpp{exp2 = \{\}} which would otherwise not work due to the ambiguity when deducing the right-hand side argument.
+The usage of \cpp{make_unexpected} is also a consequence of the adapted model for expected: a discriminated union of \cpp{T} and \cpp{unexpected_type<E>}. While \cpp{make_unexpected(E)} has been chosen because it clearly indicates that we are interested in creating an unexpected \cpp{expected<T,E>} (of unspecified type \cpp{T}), it could be also used to make a ready future with a specific error, but this is outside the scope of this proposal. Note also that the definition of the result type of \cpp{make_unexpected} has an explicitly deleted default constructor. This is in order to enable the reset idiom \cpp{exp2 = \{\}} which would otherwise not work due to the ambiguity when deducing the right-hand side argument.
 
 \subsection{Observers}
 %%%%%%%%%%%%%%%%%%
@@ -565,7 +565,7 @@ In order to be as efficient as possible, this proposal includes observers with n
 \subsubsection{Explicit conversion to \cpp{bool}}
 %%%%%%%%%%%%%%%%%%
 
-The rational described in \cite{OptionalRev4} for \cpp{optional<T>} applies to \\cpp{expected<T,E>} and so, the following example combines initialization and value-checking in a boolean context.
+The rational described in \cite{OptionalRev4} for \cpp{optional<T>} applies to \cpp{expected<T,E>} and so, the following example combines initialization and value-checking in a boolean context.
 
 \begin{alltt}
 if (expected<char, error_condition> ch = readNextChar()) \{
@@ -576,7 +576,7 @@ if (expected<char, error_condition> ch = readNextChar()) \{
 \subsubsection{Accessing the contained value}
 %%%%%%%%%%%%%%%%%%
 
-Even if \\cpp{expected<T,E>} has not been used in practice for a while as Boost.Optional, we consider that following the same interface that \cpp{std::experimental::optional<T>} makes the C++ standard library more homogeneous. The rational described in \cite{OptionalRev4} for \cpp{optional<T>} applies to \\cpp{expected<T,E>}. 
+Even if \cpp{expected<T,E>} has not been used in practice for a while as Boost.Optional, we consider that following the same interface that \cpp{std::experimental::optional<T>} makes the C++ standard library more homogeneous. The rational described in \cite{OptionalRev4} for \cpp{optional<T>} applies to \cpp{expected<T,E>}. 
 
 \subsubsection{Dereference operator}
 %%%%%%%%%%%%%%%%%%
@@ -664,7 +664,7 @@ expected<pair<int, int>, errc> getIntRange(istream_range& r) \{
 \}
 \end{alltt}
 
-\cpp{get_unexpected} is also provided for symmetry purpose. On one side, there is an implicit conversion from \cpp{unexpected<E>} to \\cpp{expected<T,E>} and on the other side there is an explicit conversion from \\cpp{expected<T,E>} to \cpp{unexpected<E>}. A more pleasant function manipulating error is \cpp{catch_error(F)} and is explained in the monadic operations in section \ref{monadic-operations}.
+\cpp{get_unexpected} is also provided for symmetry purpose. On one side, there is an implicit conversion from \cpp{unexpected<E>} to \cpp{expected<T,E>} and on the other side there is an explicit conversion from \cpp{expected<T,E>} to \cpp{unexpected<E>}. A more pleasant function manipulating error is \cpp{catch_error(F)} and is explained in the monadic operations in section \ref{monadic-operations}.
 
 \subsubsection{Function \cpp{value_or}}
 %%%%%%%%%%%%%%%%%%
@@ -780,7 +780,7 @@ The same applies to the relational operators for \cpp{unexpected_type<E>} .
 \subsubsection{Reseting the value}
 %%%%%%%%%%%%%%%%%%
 
-Reseting the value of \\cpp{expected<T,E>} is similar to \cpp{optional<T>} but instead of building a disengaged \cpp{optional<T>}, we build a erroneous \\cpp{expected<T,E>}. Hence, the semantics and rational is the same than in \cite{OptionalRev4}.
+Reseting the value of \cpp{expected<T,E>} is similar to \cpp{optional<T>} but instead of building a disengaged \cpp{optional<T>}, we build a erroneous \cpp{expected<T,E>}. Hence, the semantics and rational is the same than in \cite{OptionalRev4}.
 
 \subsubsection{Tag \cpp{in_place}}
 %%%%%%%%%%%%%%%%%%
@@ -809,7 +809,7 @@ In order to make the tag uniform an additional "expect" constructor could be pro
 \subsubsection{Requirements on \cpp{T} and \cpp{E}}
 %%%%%%%%%%%%%%%%%%
 
-Class template \cpp{expected} imposes little requirements on \cpp{T} and \cpp{E}: they have to be  complete object type satisfying the requirements of \cpp{Destructible}. Each operations on \\cpp{expected<T,E>} have different requirements and may be disable if \cpp{T} or \cpp{E} doesn't respect these requirements. For example, \\cpp{expected<T,E>}'s move constructor requires that \cpp{T} and \cpp{E} are \cpp{MoveConstructible}, \\cpp{expected<T,E>}'s copy constructor requires that \cpp{T} and \cpp{E} are \cpp{CopyConstructible}, and so on. This is because \\cpp{expected<T,E>} is a wrapper for \cpp{T} or \cpp{E}: it should resemble \cpp{T} as much as possible. If \cpp{T} is \cpp{EqualityComparable} then (and only then) we expect \\cpp{expected<T,E>} to be \cpp{EqualityComparable}. 
+Class template \cpp{expected} imposes little requirements on \cpp{T} and \cpp{E}: they have to be  complete object type satisfying the requirements of \cpp{Destructible}. Each operations on \cpp{expected<T,E>} have different requirements and may be disable if \cpp{T} or \cpp{E} doesn't respect these requirements. For example, \cpp{expected<T,E>}'s move constructor requires that \cpp{T} and \cpp{E} are \cpp{MoveConstructible}, \cpp{expected<T,E>}'s copy constructor requires that \cpp{T} and \cpp{E} are \cpp{CopyConstructible}, and so on. This is because \cpp{expected<T,E>} is a wrapper for \cpp{T} or \cpp{E}: it should resemble \cpp{T} as much as possible. If \cpp{T} is \cpp{EqualityComparable} then (and only then) we expect \cpp{expected<T,E>} to be \cpp{EqualityComparable}. 
 
 \subsubsection{Expected references}
 %%%%%%%%%%%%%%%%%%
@@ -829,7 +829,7 @@ In \cite{OptionalRev4}, they propose to make \cpp{optional} a literal type, the 
 \subsection{Moved from state}
 %%%%%%%%%%%%%%%%%%
 
-We follow the approach taken in \cpp{optional}\cite{OptionalRev4}. Moving \\cpp{expected<T,E>} do not modify the state of the source (valued or erroneous) of \cpp{expected} and the move semantics is up to \cpp{T} or \cpp{E}.
+We follow the approach taken in \cpp{optional}\cite{OptionalRev4}. Moving \cpp{expected<T,E>} do not modify the state of the source (valued or erroneous) of \cpp{expected} and the move semantics is up to \cpp{T} or \cpp{E}.
 
 \subsection{IO operations}
 %%%%%%%%%%%%%%%%%%
@@ -844,7 +844,7 @@ A monadic interface is not optional if we don't want to fall back in the problem
 
 \subsubsection{Functor \cpp{map}}
 
-The operation \cpp{map} consider expected as a functor and just apply a function on the contained value, if any. The types of the two overloads are presented using a functional notation and the \cpp{[]} represent a context in which the value T or U is contained. The current context is \cpp{expected} and thus \cpp{[T]} is equivalent to \\cpp{expected<T,E>}.
+The operation \cpp{map} consider expected as a functor and just apply a function on the contained value, if any. The types of the two overloads are presented using a functional notation and the \cpp{[]} represent a context in which the value T or U is contained. The current context is \cpp{expected} and thus \cpp{[T]} is equivalent to \cpp{expected<T,E>}.
 
 \begin{itemize}
 \item \cpp{(T -> U) -> [U]}
@@ -933,9 +933,9 @@ We could add such a function to the standard, either as a free function or as a 
 \subsection{Variant}
 %%%%%%%%%%%%%%%%%%%%
 
-\cpp{expected<T,E>} can be seen as a specialization of  \cpp{boost::variant<unexpected<E>,T>} which gives a specific intent to its second parameter, that is, it represents the type of the expected contained value. This specificity allows to provide a pointer like interface, as it is the case for \cpp{std::experimental::optional<T>}. Even if the standard included a class  \cpp{variant<T,E>}, the interface provided by \\cpp{expected<T,E>} is more specific and closer to what the user could expect as the result type of a function. In addition, \\cpp{expected<T,E>} doesn't intend to be used to define recursive data as \cpp{boost::variant<>} does.
+\cpp{expected<T,E>} can be seen as a specialization of  \cpp{boost::variant<unexpected<E>,T>} which gives a specific intent to its second parameter, that is, it represents the type of the expected contained value. This specificity allows to provide a pointer like interface, as it is the case for \cpp{std::experimental::optional<T>}. Even if the standard included a class  \cpp{variant<T,E>}, the interface provided by \cpp{expected<T,E>} is more specific and closer to what the user could expect as the result type of a function. In addition, \cpp{expected<T,E>} doesn't intend to be used to define recursive data as \cpp{boost::variant<>} does.
 
-The table \ref{comp-variant} presents a brief comparison between \cpp{boost::variant<unexpected<E>, T>} and \\cpp{expected<T,E>}.
+The table \ref{comp-variant} presents a brief comparison between \cpp{boost::variant<unexpected<E>, T>} and \cpp{expected<T,E>}.
 
 \begin{table}[h!]
 \bgroup
@@ -973,7 +973,7 @@ The table \ref{comp-variant} presents a brief comparison between \cpp{boost::var
 \subsection{Optional}
 %%%%%%%%%%%
 
-We can see \\cpp{expected<T,E>} as an \cpp{std::experimental::optional<T>} that collapse all the values of \cpp{E} to \cpp{nullopt}. We can convert an \\cpp{expected<T,E>} to an \cpp{optional<T>} with the possible loss of information.
+We can see \cpp{expected<T,E>} as an \cpp{std::experimental::optional<T>} that collapse all the values of \cpp{E} to \cpp{nullopt}. We can convert an \cpp{expected<T,E>} to an \cpp{optional<T>} with the possible loss of information.
 
 \begin{alltt}
 template <class T>
@@ -983,7 +983,7 @@ optional<T> make_optional(expected<T,E> v) \{
 \}
 \end{alltt}
 \noindent
-We can convert an \cpp{optional<T>} to an \\cpp{expected<T,E>} without knowledge of the root cause. We consider that \cpp{E()} is equal to \cpp{nullopt} since it shouldn't bring more informations (however it depends on the underlying error --- we considered \cpp{exception_ptr} and \cpp{error_condition}).
+We can convert an \cpp{optional<T>} to an \cpp{expected<T,E>} without knowledge of the root cause. We consider that \cpp{E()} is equal to \cpp{nullopt} since it shouldn't bring more informations (however it depends on the underlying error --- we considered \cpp{exception_ptr} and \cpp{error_condition}).
 
 \begin{alltt}
 template <class T, class E>
@@ -1044,8 +1044,8 @@ fut.then([](future<int> f) {
   });
 \end{alltt}
 
-As for the \cpp{future<T>} proposal, \\cpp{expected<T,E>} provides also a way to visit the stored values.
-\cpp{future<T>} provides a \cpp{then()} function that accepts a continuation having the \cpp{future<T>} as parameter. The synchronous nature of expected makes it easier to use two functions, one to manage with the case expected has a value and one to try to recover otherwise. This is more in line with the monad interface, as any function having a \cpp{T} as parameter can be used as parameter of the apply function, no need to have a \\cpp{expected<T,E>}. This make it easier to reuse functions. 
+As for the \cpp{future<T>} proposal, \cpp{expected<T,E>} provides also a way to visit the stored values.
+\cpp{future<T>} provides a \cpp{then()} function that accepts a continuation having the \cpp{future<T>} as parameter. The synchronous nature of expected makes it easier to use two functions, one to manage with the case expected has a value and one to try to recover otherwise. This is more in line with the monad interface, as any function having a \cpp{T} as parameter can be used as parameter of the apply function, no need to have a \cpp{expected<T,E>}. This make it easier to reuse functions. 
 
 \begin{itemize}
  \item \cpp{expected<T,E>::then()} is the counterpart of \cpp{future<T>.then()}
@@ -1055,7 +1055,7 @@ As for the \cpp{future<T>} proposal, \\cpp{expected<T,E>} provides also a way to
 
 \subsection{Comparison between optional, expected and future}
 
-The table \ref{comp-monads} presents a brief comparison between \cpp{optional<T>}, \\cpp{expected<T,E>}  and \cpp{promise<T>/future<T>}.
+The table \ref{comp-monads} presents a brief comparison between \cpp{optional<T>}, \cpp{expected<T,E>}  and \cpp{promise<T>/future<T>}.
 
 \begin{table}
 \bgroup
@@ -1201,7 +1201,7 @@ Note that this meaning of EXPECT is not valid for the list monad.
 \subsection{A Configurable Expected}
 \label{configurable-expected}
 
-Expected might be configurable through a trait \cpp{expected_traits}. The first variation point is the behavior of \cpp{value()} when \\cpp{expected<T,E>} contains an error. The current strategy throw a \cpp{bad_expected_access} exception (or the contained exception if the type is \cpp{expected<T, exception_ptr>}) but it might not be satisfactory for every error types. For example, some might want to encapsulate an \cpp{error_condition} into a specific exception. Or in debug mode, they might want to use an \cpp{assert} call.
+Expected might be configurable through a trait \cpp{expected_traits}. The first variation point is the behavior of \cpp{value()} when \cpp{expected<T,E>} contains an error. The current strategy throw a \cpp{bad_expected_access} exception (or the contained exception if the type is \cpp{expected<T, exception_ptr>}) but it might not be satisfactory for every error types. For example, some might want to encapsulate an \cpp{error_condition} into a specific exception. Or in debug mode, they might want to use an \cpp{assert} call.
 
 The other variation point is the behavior triggered when the continuation argument of \cpp{bind} or \cpp{map} throws an exception. If the exception thrown is \cpp{system_error} and the error type is \cpp{error_code}, we might want to store the error carried by the exception. Without more discussion, let's show how we could customize \cpp{expected<T, E>}, consider the following exception-oriented function:
 
@@ -1256,7 +1256,7 @@ The semantics of \cpp{catch_exception} is to rethrow the current exception and c
 \subsection{Allocator support}
 %%%%%%%%%%%%%%%
 
-As \cpp{optional<T>},  \\cpp{expected<T,E>} does not allocate memory. So it can do without allocators. However, it can be useful in compound types like:
+As \cpp{optional<T>},  \cpp{expected<T,E>} does not allocate memory. So it can do without allocators. However, it can be useful in compound types like:
 
 \begin{alltt}
 typedef vector<expected<vector<int, MyAlloc>, error>, MyAlloc> MyVec;
@@ -1374,7 +1374,7 @@ Should \cpp{expected<T,exception_ptr>} not be equality comparable?
 
 Should \cpp{expected<T,exception_ptr>} be equality comparable using shallow comparison?
 
-\subsection{Should \\cpp{expected<T,E>} make all the unexpected values equal?}
+\subsection{Should \cpp{expected<T,E>} make all the unexpected values equal?}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 Currently \cpp{expected<T,E>} and \cpp{expected<T>} don't compare its values in the same way.
@@ -1382,14 +1382,14 @@ Should \cpp{expected<T,E>} make all the unexpected values equal as it does \cpp{
 
 As for Rapperswil decision, the unexpected values of \cpp{expected<T,E>} when \cpp{E} is not \cpp{exception_ptr} don't collapse to a unique value.
 
-\subsection{Should \\cpp{expected<T,E>} throw \cpp{E} instead of \cpp{bad_expected_access<E>}?}
+\subsection{Should \cpp{expected<T,E>} throw \cpp{E} instead of \cpp{bad_expected_access<E>}?}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-As any type can be thrown as an exception, should \\cpp{expected<T,E>} throw \cpp{E} instead of \\
+As any type can be thrown as an exception, should \cpp{expected<T,E>} throw \cpp{E} instead of \\
 \cpp{bad_expected_access<E>}? 
 If yes, should \cpp{optional<T>} throw \cpp{nullopt_t} to be coherent? 
 
-\subsection{Should \\cpp{expected<T,E>} be convertible from \cpp{E} when \cpp{E} it is not convertible to \cpp{T}?}
+\subsection{Should \cpp{expected<T,E>} be convertible from \cpp{E} when \cpp{E} it is not convertible to \cpp{T}?}
 
 The implicit conversion from \cpp{E} has been forbidden to avoid ambiguity when \cpp{E} and \cpp{T} are the same type. 
 However when \cpp{E} it is not convertible to \cpp{T} there wouldn't any ambiguity. 
@@ -1408,7 +1408,7 @@ e.value(); // (1)
 \subsection{Should \cpp{map}/\cpp{bind}/\cpp{then} catch the exceptions throw by the continuation?}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-It is easy to catch the exceptions when the type is \cpp{expected<T>}. However, doing it for \\cpp{expected<T,E>} needs a conversion from the current exception and the error E.
+It is easy to catch the exceptions when the type is \cpp{expected<T>}. However, doing it for \cpp{expected<T,E>} needs a conversion from the current exception and the error E.
 
 This proposal requires that the continuation doesn't throw exceptions as we don't have a general solution.
 
@@ -1828,13 +1828,13 @@ inline namespace fundamentals_v2 {
 }}}
 \end{lstlisting}
 
-A program that necessitates the instantiation of template \\cpp{expected<T,E>} with \cpp{T} for a reference type\, or for possibly cv-qualified types \cpp{in_place_t}, \cpp{unexpect_t} or \cpp{unexpected_type<E>} is ill-formed.
+A program that necessitates the instantiation of template \cpp{expected<T,E>} with \cpp{T} for a reference type\, or for possibly cv-qualified types \cpp{in_place_t}, \cpp{unexpect_t} or \cpp{unexpected_type<E>} is ill-formed.
 
 \wordingSubSec{Definitions}{expected.defs}
 %%%%%%%%%%%%%%%%%%%%%%
 
-An instance of \\cpp{expected<T,E>} is said to be valued if it contains an value of type \cpp{T}.
-An instance of \\cpp{expected<T,E>} is said to be unexpected if it contains an object of type \cpp{E}.
+An instance of \cpp{expected<T,E>} is said to be valued if it contains an value of type \cpp{T}.
+An instance of \cpp{expected<T,E>} is said to be unexpected if it contains an object of type \cpp{E}.
 
 \wordingSubSec{expected for object types}{expected.object}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1951,7 +1951,7 @@ An instance of \\cpp{expected<T,E>} is said to be unexpected if it contains an o
 \end{lstlisting}
 
 
-Valued instances of \\cpp{expected<T,E>} where \cpp{T} and \cpp{E} is of object type shall contain a value of type \cpp{T} or a value of type \cpp{E} within its own storage. This value is referred to as the contained or the unexpected value of the expected object. Implementations are not permitted to use additional storage, such as dynamic memory, to allocate its contained or unexpected value. The contained or unexpected value shall be allocated in a region of the \\cpp{expected<T,E>} storage suitably aligned for the type \cpp{T} and \cpp{E}.
+Valued instances of \cpp{expected<T,E>} where \cpp{T} and \cpp{E} is of object type shall contain a value of type \cpp{T} or a value of type \cpp{E} within its own storage. This value is referred to as the contained or the unexpected value of the expected object. Implementations are not permitted to use additional storage, such as dynamic memory, to allocate its contained or unexpected value. The contained or unexpected value shall be allocated in a region of the \cpp{expected<T,E>} storage suitably aligned for the type \cpp{T} and \cpp{E}.
 \newline
 
 Members \cpp{has_value}, \cpp{val} and \cpp{err} are provided for exposition only. Implementations need not provide those members. \cpp{has_value} indicates whether the expected object's contained value has been initialized (and not yet destroyed); when \cpp{has_value} is true \cpp{val} points to the contained value, and when it is false \cpp{err} points to the erroneous value. 
@@ -2635,7 +2635,7 @@ The function shall not participate in overload resolution unless: \\
 \end{wordingTextItem}
 
 \begin{wordingTextItem}{Throws}
-Any exception thrown by the selected constructor of \\cpp{expected<T,E>}.
+Any exception thrown by the selected constructor of \cpp{expected<T,E>}.
 \end{wordingTextItem}
 
 \begin{wordingTextItem}{Remarks}
@@ -2683,7 +2683,7 @@ The function shall not participate in overload resolution unless: \\
 \end{wordingTextItem}
 
 \begin{wordingTextItem}{Throws}
-Any exception thrown by the selected constructor of \\cpp{expected<T,E>}.
+Any exception thrown by the selected constructor of \cpp{expected<T,E>}.
 \end{wordingTextItem}
 
 \begin{wordingTextItem}{Remarks}
@@ -2755,7 +2755,7 @@ expected<T,E> catch_error(F&& func);
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
 if \cpp{! (*this)} returns \cpp{unwrap(expected<decltype(func(val)), E>(funct(**this)))}, 
-if \cpp{! *this} returns the result of the call continuation function \cpp{fuct} possibly wrapped on a \\cpp{expected<T,E>}, 
+if \cpp{! *this} returns the result of the call continuation function \cpp{fuct} possibly wrapped on a \cpp{expected<T,E>}, 
 otherwise, returns \cpp{*this}.
 \end{wordingTextItem}
 \end{wordingPara}
@@ -3029,7 +3029,7 @@ struct hash<expected<T,E>>;
 \begin{wordingPara}
 \begin{wordingTextItem}{Requires}
 The template specialization \cpp{hash<T>} and \cpp{hash<E>} shall meet the requirements of class template \cpp{hash} (Z.X.Y). The template specialization \cpp{hash<expected<T,E>>} shall meet the requirements of class template \cpp{hash}. For an object \cpp{e} of type \\
-\\cpp{expected<T,E>}, \cpp{if bool(e)}, \cpp{hash<expected<T,E>>()(e)} shall evaluate to the same value as \cpp{hash<T, E>()(*e);} otherwise it evaluates to an unspecified value if \cpp{E} is \cpp{exception_ptr}  or \cpp{hash<T, E>()(e.error());}.
+\cpp{expected<T,E>}, \cpp{if bool(e)}, \cpp{hash<expected<T,E>>()(e)} shall evaluate to the same value as \cpp{hash<T, E>()(*e);} otherwise it evaluates to an unspecified value if \cpp{E} is \cpp{exception_ptr}  or \cpp{hash<T, E>()(e.error());}.
 \end{wordingTextItem}
 \end{wordingPara}
 
