@@ -493,15 +493,11 @@ It raises several questions about \cpp{expected<T,E>}:
 \begin{itemize}
 \item Should the default constructor of \cpp{expected<T,E>} behave like \cpp{variant<T,E>} or as \cpp{variant<E,T>}?
 \item Should the default constructor of \cpp{expected<T,E>} behave like \cpp{optional<variant<T,E>>}?
-\item Should the default constructor of \cpp{expected<nullopt_t,T>} behave like \cpp{optional<T>}? If yes, how should behave the default constructor of \cpp{expected<T,E>}? As if initialized with \cpp{make_unexpected(E())}? This would be equivalent to the initialization of \cpp{variant<E,T>}.
+\item Should the default constructor of \cpp{expected<T, nullopt_t>} behave like \cpp{optional<T>}? If yes, how should behave the default constructor of \cpp{expected<T,E>}? As if initialized with \cpp{make_unexpected(E())}? This would be equivalent to the initialization of \cpp{variant<E,T>}.
 \item Should \cpp{expected<T,E>} provide a default constructor at all? \cite{OptionalRev3} presents valid arguments against this approach, e.g. \cpp{array<expected<T,E>>} would not be possible. 
 \end{itemize}
 
-Requiring \cpp{E} to be default constructible seems less constraining than requiring \cpp{T} to be default constructible (e.g. consider the \cpp{Date} example in \cite{OptionalRev3}). With the same semantics \cpp{expected<Date,E>} would be \cpp{Regular} with a meaningful not-a-date state created by default.
-
-There is still a minor issue as the default constructor of \cpp{std::exception_ptr} doesn't contains an exception and so getting the value of a default constructed \cpp{expected<T>} would need to check if the stored \cpp{std::exception_ptr} is equal to \cpp{std::exception_ptr()} and throw a specific exception.
-
-The authors consider the arguments in  \cite{OptionalRev3} valid and so propose that \cpp{expected<T,E>} default constructor should behave as constructed with \cpp{make_unexpected(E())}.
+Unlike \cpp{optional<T>}, the goal of expected is not to provide a wrapper for types that are not default-constructible. Hence, the authors consider that \cpp{expected<T,E>} should have a default constructor if and only if \cpp{T} is default-constructible, and if so, default construct to \cpp{T\{\}}. If \cpp{T} is not default constructible, the user will be free to wrap it inside an optional (\cpp{expected<optional<T>, E>}).
 
 \subsubsection{Conversion from \cpp{T}}
 %%%%%%%%%%%%%%%%%%
