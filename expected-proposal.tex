@@ -1202,16 +1202,16 @@ Expected might be configurable through a trait \cpp{expected_traits}. The first 
 The other variation point is the behavior triggered when the continuation argument of \cpp{bind} or \cpp{map} throws an exception. If the exception thrown is \cpp{system_error} and the error type is \cpp{error_code}, we might want to store the error carried by the exception. Without more discussion, let's show how we could customize \cpp{expected<T, E>}, consider the following exception-oriented function:
 
 \begin{alltt}
-class error_cond : public std::exception {
+class error_cond : public std::exception \{
   // Implementation similar to system_error but for error_condition here.
-};
+\};
 
 int safe_divide(int i, int j)
-{
+\{
   if (j == 0) 
     throw error_cond(error_condition(arithmetic_errc::divide_by_zero));
   return i/j;
-}
+\}
 \end{alltt}
 
 \noindent
@@ -1235,7 +1235,7 @@ struct expected_traits<expected<T, error_condition>>
   \{
     try\{
       rethrow_exception(e);
-    \} catch(const error_cond& e) {
+    \} catch(const error_cond& e) \{
       return make_unexpected(e.code());
     \}
   \}
@@ -1244,7 +1244,7 @@ struct expected_traits<expected<T, error_condition>>
   \{
     throw error_cond(e);
   \}
-};
+\};
 \end{alltt}
 
 The semantics of \cpp{catch_exception} is to rethrow the current exception and catch only the exceptions we are interested in. The default behavior let flight the exception thrown by the continuation. We created a bridge between an \cpp{error_condition} and the \cpp{error_cond} exception.
