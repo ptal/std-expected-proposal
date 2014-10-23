@@ -111,7 +111,7 @@
 \begin{textblock*}{9cm}(7cm,-8cm)
 \begin{tabular}{l l}
 \textbf{Document number:} & DXXXX \\
-\textbf{Date:}  & 2014-06-29 \\
+\textbf{Date:}  & 2014-10-23 \\
 \textbf{Revises:} & N4109 \\
 \textbf{Project:} & JTC1.22.32 Programming \\
  & Language C++ \\
@@ -131,6 +131,10 @@
 %%%%%%%%
 
 \begin{itemize}
+\item R2- Revision of N4109 \cite{ExpectedR1} after mailing list feedback: 
+\begin{itemize}
+\item Fix default constructor wording to default to \cpp{make_unexpected({E})}, add the alternative to default construct to \cpp{{T}} on the rationale and add an open point on how the default constructor must behave.
+\end{itemize}
 \item R1- Revision of N4015 \cite{ExpectedR0} after Rapperswil feedback: 
 \begin{itemize}
 \item Switch the \cpp{expected} class template parameter order from \cpp{expected<E,T>} to \cpp{expected<T,E>}.
@@ -184,17 +188,17 @@ The first and the third characteristic seem to be quite contradictory and deserv
 \subsection{Expected class}
 %%%%%%%%%%%%%%%%%%%%
 
-We can do the same analysis for the \cpp{Expected<E, T>} class and observe the advantages over the classic error reporting systems.
+We can do the same analysis for the \cpp{expected<T, E>} class and observe the advantages over the classic error reporting systems.
 
 \begin{itemize}
- \item \textbf{Error visibility} It takes the best of the exception and error code. It's visible because the return type is Expected<E, T> and the user cannot ignore the error case if he wants to retrieve the contained value.
+ \item \textbf{Error visibility} It takes the best of the exception and error code. It's visible because the return type is \cpp{expected<T, E>} and the user cannot ignore the error case if he wants to retrieve the contained value.
  \item \textbf{Information} Arbitrarily rich.
- \item \textbf{Clean code} The monadic interface of expected provides a framework delegating the error handling to another layer of code. Note that \cpp{Expected<E, T>} can also act as a bridge between an exception-oriented code and a nothrow world.
+ \item \textbf{Clean code} The monadic interface of expected provides a framework delegating the error handling to another layer of code. Note that \cpp{expected<T, E>} can also act as a bridge between an exception-oriented code and a nothrow world.
  \item \textbf{Non-Intrusive} Use the return channel without monopolizing it.
 \end{itemize}
 
 \noindent
-It worths mentioning the other characteristics of \cpp{Expected<E, T>}:
+It worths mentioning the other characteristics of \cpp{expected<T, E>}:
 
 \begin{itemize}
  \item Associates errors with computational goals.
@@ -240,13 +244,13 @@ enum class arithmetic_errc
 \noindent
 Using \cpp{expected<double, error_condition>}, the code becomes:
 
-\begin{alltt}
+\begin{lstlisting}
 expected<double,error_condition> safe_divide(double i, double j)
-\{
+{
   if (j==0) return make_unexpected(arithmetic_errc::divide_by_zero); // (1)
   else return i / j; // (2)
-\}
-\end{alltt}
+}
+\end{lstlisting}
 
 (1) The implicit conversion from \cpp{unexpected_type<E>} to \cpp{expected<T,E>} and (2) from \cpp{T} to \cpp{expected<T,E>} prevents using too much boilerplate code. The advantages are that we have a clean way to fail without using the exception machinery, and we can give precise information about why it failed as well. The liability is that this function is going to be tedious to use. For instance, the exception-based function $i + j/k$ is:
 
@@ -260,46 +264,46 @@ double f1(double i, double j, double k)
 \noindent
 but becomes using \cpp{expected<double, error_condition>}:
 
-\begin{alltt}
+\begin{lstlisting}
 expected<double, error_condition> f1(double i, double j, double k)
-\{
+{
   auto q = safe_divide(j, k)
   if(q) return i + *q;
   else return q;
-\}
-\end{alltt}
+}
+\end{lstlisting}
 
 \noindent
 This example clearly doesn't respect the ``clean code'' characteristic introduced in section \ref{motiv-scope} and the readability doesn't differ much from the ``C return code''. Hopefully, we can see \cpp{expected<T,E>} through functional glasses as a monad. The code is cleaner using the member function \cpp{map}. This way, the error handling is not explicitly mentioned but we still know, thanks to the call to \cpp{map}, that something is going underneath and thus it is not as silent as exception.
 
-\begin{alltt}
+\begin{lstlisting}
 expected<double, error_condition> f1(double i, double j, double k)
-\{
-  return safe_divide(j, k).map([&](double q)\{
+{
+  return safe_divide(j, k).map([&](double q){
     return i + q;
-  \});
-\}
-\end{alltt}
+  });
+}
+\end{lstlisting}
 
 The \cpp{map} member calls the continuation provided if expected contains a value, otherwise it forwards the error to the callee. Using lambda function might clutter the code, so here the same example using functor:
 
-\begin{alltt}
+\begin{lstlisting}
 expected<double, error_condition> f1(double i, double j, double k)
-\{
+{
   return safe_divide(j, k).map(bind(plus, i, _1));
-\}
-\end{alltt}
+}
+\end{lstlisting}
 
 We can use \cpp{expected<T, E>} to represent different error conditions. For instance, with integer division, we might want to fail if the two numbers are not evenly divisible as well as checking for division by zero. We can overload our \cpp{safe_divide} function accordingly:
 
-\begin{alltt}
-expected<error_condition, int> safe_divide(int i, int j)
-\{
+\begin{lstlisting}
+expected<int, error_condition> safe_divide(int i, int j)
+{
   if (j == 0) return make_unexpected(arithmetic_errc::divide_by_zero); 
   if (i%j != 0) return make_unexpected(arithmetic_errc::not_integer_division);
   else return i / j;
-\}
-\end{alltt}
+}
+\end{lstlisting}
 
 Now we have a division function for integers that possibly fail in two ways. We continue with the exception-oriented function $i/k + j/k$:
 
@@ -313,29 +317,29 @@ int f2(int i, int j, int k)
 \noindent
 Now let's write this code using an \cpp{expected<T,E>} type and the functional \cpp{map} already used previously.
 
-\begin{alltt}
+\begin{lstlisting}
 expected<int,error_condition> f(int i, int j, int k)
-\{
-  return safe_divide(i, k).bind([=](int q1) \{
-      return safe_divide(j,k).map([=](int q2) \{
+{
+  return safe_divide(i, k).map([=](int q1) {
+      return safe_divide(j,k).map([=](int q2) {
         return q1+q2;
-      \});
-    \});
-\}
-\end{alltt}
+      });
+    });
+}
+\end{lstlisting}
 
-The compiler will gently say he can convert an \cpp{expected<expected<int, error_condition>, error_condition>} to \cpp{expected<int, error_condition>}. This is because the member \cpp{map} wraps the result in Expected and since we use twice the \cpp{map} member it wraps it twice. The \cpp{bind}\footnote{To not confound with \cpp{std::bind} which is not related to monad.} member wraps the result of the continuation only if it is not already wrapped. The correct version is as follow:
+The compiler will gently say he can convert an \cpp{expected<expected<int, error_condition>, error_condition>} to \cpp{expected<int, error_condition>}. This is because the member \cpp{map} wraps the result in \cpp{expected} and since we use twice the \cpp{map} member it wraps it twice. The \cpp{bind}\footnote{To not confound with \cpp{std::bind} which is not related to monad.} member wraps the result of the continuation only if it is not already wrapped. The correct version is as follow:
 
-\begin{alltt}
+\begin{lstlisting}
 expected<int, error_condition> f(int i, int j, int k)
-\{
-  return safe_divide(i, k).bind([=](int q1) \{
-      return safe_divide(j,k).bind([=](int q2) \{
+{
+  return safe_divide(i, k).bind([=](int q1) {
+      return safe_divide(j,k).map([=](int q2) {
         return q1+q2;
-      \});
-    \});
-\}
-\end{alltt}
+      });
+    });
+}
+\end{lstlisting}
 
 The error-handling code has completely disappeared but the lambda functions are a new source of noise, and this is even more important with $n$ expected variables. Propositions for a better monadic experience are discussed in section \ref{better-support-for-monad}, the subject is left open and is considered out of scope of this proposal.
 
@@ -354,32 +358,32 @@ Because the first behavior might lead to buggy application, we won't consider it
 
 We spoke about how to use the value contained in the Expected but didn't discuss yet the error usage. A first imperative way to use our error is to simply extract it from the Expected using the \cpp{error()} member function. The following example shows a \cpp{divide2} function that return 0 if the error is \cpp{divide_by_zero}:
 
-\begin{alltt}
+\begin{lstlisting}
 expected<int, error_condition> divide2(int i, int j)
-\{
+{
   auto e = safe_divide(i,j);
-  if (!e && e.error().value() == arithmetic_errc::divide_by_zero) \{
+  if (!e && e.error().value() == arithmetic_errc::divide_by_zero) {
     return 0;
-  \}
+  }
   return e;
-\}
-\end{alltt}
+}
+\end{lstlisting}
 
 This imperative way is not entirely satisfactory since it suffers from the same disadvantages than \cpp{value()}. Again, a functional view leads to a better solution. The \cpp{catch_error} member calls the continuation passed as argument if the expected is erroneous.
 
-\begin{alltt}
+\begin{lstlisting}
 expected<int, error_condition> divide3(int i, int j)
-\{
+{
   auto e = safe_divide(i,j);
-  return e.catch_error([](const error_condition& e)\{
+  return e.catch_error([](const error_condition& e){
     if(e.value() == arithmetic_errc::divide_by_zero)
-    \{
+    {
       return 0;
-    \}
+    }
     return make_unexpected(e);
-  \});
-\}
-\end{alltt}
+  });
+}
+\end{lstlisting}
 
 An advantage of this version is to be coherent with the \cpp{bind} and \cpp{map} functions. It also provides a more uniform way to analyze error and recover from some of these. Finally, it encourages the user to code its own ``error-resolver'' function and leads to a code with distinct treatment layers.
 
@@ -402,7 +406,7 @@ The interface in this model requires operations such as comparison to \cpp{T}, c
 
 Additionally, within the affordable limits, we propose the view that \cpp{expected<T,E>} extends the set of the values of \cpp{T} by the values of type \cpp{E}. This is reflected in initialization, assignment, ordering, and equality comparison with both \cpp{T} and \cpp{E}. In the case of  \cpp{optional<T>}, \cpp{T} can not be a \cpp{nullopt_t}. As the types \cpp{T} and \cpp{E} could be the same in \cpp{expected<T,E>}, there is need to tag the values of \cpp{E} to avoid ambiguous expressions. The \cpp{make_unexpected(E)} function is proposed for this purpose. However \cpp{T} can not be  \cpp{unexpected_type<E>} for a given \cpp{E}.
 
-\begin{alltt}
+\begin{lstlisting}
 expected<int, string> ei = 0;
 expected<int, string> ej = 1;
 expected<int, string> ek = make_unexpected(string());
@@ -414,17 +418,17 @@ ek = 0;
 ei = make_unexpected(E());;
 ej = 0;
 ek = 1;
-\end{alltt}
+\end{lstlisting}
 
 \subsection{Initialization of \cpp{expected<T,E>}}
 %%%%%%%%%%%%%%%%%%%%%%%
-an
+
 In cases \cpp{T} and \cpp{E} are value semantic types capable of storing \cpp{n} and \cpp{m} distinct values respectively, \cpp{expected<T,E>} can be seen as an extended \cpp{T} capable of storing \cpp{n + m} values: these that \cpp{T} and \cpp{E} stores. Any valid initialization scheme must provide a way to put an expected object to any of these states. In addition, some \cpp{T}'s  are not \cpp{CopyConstructible} and their expected variants still should be constructible with any set of arguments that work for \cpp{T}.
 
 \noindent
 As in \cite{OptionalRev4}, the model retained is to initialize either by providing an already constructed \cpp{T} or a tagged \cpp{E}. The default constructor required \cpp{E} to be default-constructible (which is more likely to happen than \cpp{T}).
 
-\begin{alltt}
+\begin{lstlisting}
 string s{"STR"};
 
 expected<string, error_condition> es{s};              // requires Copyable<T>
@@ -432,36 +436,36 @@ expected<string, error_condition> et = s;             // requires Copyable<T>
 expected<string, error_condition> ev = string{"STR"}; // requires Movable<T>
 
 expected<string, error_condition> ew;                 // unexpected value
-expected<string, error_condition> ex\{\};               // unexpected value
-expected<string, error_condition> ey = \{\};            // unexpected value
-expected<string,error_condition> ez = expected<string,error_condition>\{\};  // unexpected value
-\end{alltt}
+expected<string, error_condition> ex{};               // unexpected value
+expected<string, error_condition> ey = {};            // unexpected value
+expected<string,error_condition> ez = expected<string,error_condition>{};  // unexpected value
+\end{lstlisting}
 
 \noindent
 In order to create an unexpected object, the special function \cpp{make_unexpected} needs to be used:
 
-\begin{alltt}
+\begin{lstlisting}
 expected<string, int> ep{make_unexpected(-1)};    // unexpected value, requires Movable<E>
 expected<string, int> eq = make_unexpected(-1);   // unexpected value, requires Movable<E>
-\end{alltt}
+\end{lstlisting}
 
 \noindent
 As in \cite{OptionalRev4}, and in order to avoid calling move/copy constructor of \cpp{T}, we use a ``tagged'' placement constructor: 
 
-\begin{alltt}
+\begin{lstlisting}
 expected<MoveOnly, error_condition> eg;                  // unexpected value
-expected<MoveOnly, error_condition> eh\{\};                // unexpected value
-expected<MoveOnly, error_condition> ei{in_place};        // calls MoveOnly\{\} in place
-expected<MoveOnly, error_condition> ej\{in_place, "arg"\}; // calls MoveOnly\{"arg"\} in place
-\end{alltt}
+expected<MoveOnly, error_condition> eh{};                // unexpected value
+expected<MoveOnly, error_condition> ei{in_place};        // calls MoveOnly{} in place
+expected<MoveOnly, error_condition> ej{in_place, "arg"}; // calls MoveOnly{"arg"} in place
+\end{lstlisting}
 
 \noindent
 To avoid calling move/copy constructor of \cpp{E}, we use a ``tagged'' placement constructor: 
 
-\begin{alltt}
-expected<int, string> ei\{unexpect\};         // unexpected value, calls string\{\} in place
-expected<int, string> ej\{unexpect, "arg"\};  // unexpected value, calls string\{"arg"\} in place
-\end{alltt}
+\begin{lstlisting}
+expected<int, string> ei{unexpect};         // unexpected value, calls string{} in place
+expected<int, string> ej{unexpect, "arg"};  // unexpected value, calls string{"arg"} in place
+\end{lstlisting}
 
 \noindent
 An alternative name for \cpp{in_place} that is coherent with \cpp{unexpect} could be \cpp{expect}. Being compatible with \cpp{optional<T>} seems more important. So this proposal doesn't propose such a \cpp{expect} tag.
@@ -497,59 +501,65 @@ It raises several questions about \cpp{expected<T,E>}:
 \item Should \cpp{expected<T,E>} provide a default constructor at all? \cite{OptionalRev3} presents valid arguments against this approach, e.g. \cpp{array<expected<T,E>>} would not be possible. 
 \end{itemize}
 
-Unlike \cpp{optional<T>}, the goal of expected is not to provide a wrapper for types that are not default-constructible. Hence, the authors consider that \cpp{expected<T,E>} should have a default constructor if and only if \cpp{T} is default-constructible, and if so, default construct to \cpp{T\{\}}. If \cpp{T} is not default constructible, the user will be free to wrap it inside an optional (\cpp{expected<optional<T>, E>}).
+Requiring \cpp{E} to be default constructible seems less constraining than requiring \cpp{T} to be default constructible (e.g. consider the \cpp{Date} example in \cite{OptionalRev3}). With the same semantics \cpp{expected<Date,E>} would be \cpp{Regular} with a meaningful not-a-date state created by default.
+
+There is still a minor issue as the default constructor of \cpp{std::exception_ptr} doesn't contains an exception and so getting the value of a default constructed \cpp{expected<T>} would need to check if the stored \cpp{std::exception_ptr} is equal to \cpp{std::exception_ptr()} and throw a specific exception.
+
+The current proposal follows the  \cite{OptionalRev3} and so  \cpp{expected<T,E>} default constructor should behave as constructed with \cpp{make_unexpected(E())}.
+
+However, as the goal of expected is to behave as much as possible as \cpp{T}, the authors consider that the alternative merits discussion: \cpp{expected<T,E>} should have a default constructor if and only if \cpp{T} is default-constructible, and if so, default construct to \cpp{T\{\}}. If \cpp{T} is not default constructible, the user will be free to wrap it inside an optional (\cpp{expected<optional<T>, E>}).
 
 \subsubsection{Conversion from \cpp{T}}
 %%%%%%%%%%%%%%%%%%
 
 An object of type \cpp{T} is convertible to an expected object of type \cpp{expected<T,E>}:
 
-\begin{alltt}
+\begin{lstlisting}
 expected<int, error_condition> ei = 1; // works
-\end{alltt}
+\end{lstlisting}
 \noindent
 This convenience feature is not strictly necessary because you can achieve the same effect by using tagged forwarding constructor:
 
-\begin{alltt}
-expected<int, error_condition> ei\{in_place, 1\};
-\end{alltt}
+\begin{lstlisting}
+expected<int, error_condition> ei{in_place, 1};
+\end{lstlisting}
 \noindent
 If the latter appears too cumbersome, one can always use function \cpp{make_expected} described below:
 
-\begin{alltt}
+\begin{lstlisting}
 expected<int> ei = make_expected(1);
 auto ej = make_expected(1); 
-\end{alltt}
+\end{lstlisting}
 
 \subsubsection{Conversion from \cpp{E}}
 %%%%%%%%%%%%%%%%%%
 
 An object of type \cpp{E} is not convertible to an unexpected object of type \cpp{expected<T,E>} since \cpp{E} and \cpp{T} can be of the same type. The proposed interface uses a special tag \cpp{unexpect} and a special non-member \cpp{make_unexpected} function to indicate an unexpected state for \cpp{expected<T,E>}. It is used for construction and assignment. This might rise a couple of objections. First, this duplication is not strictly necessary because you can achieve the same effect by using the \cpp{unexpect} tagged forwarding constructor:
 
-\begin{alltt}
+\begin{lstlisting}
 expected<string, int> exp1 = make_unexpected(1); 
-expected<string, int> exp2 = \{unexpect, 1\};
+expected<string, int> exp2 = {unexpect, 1};
 
 exp1 = make_unexpected(1);
 exp2 = {unexpect, 1};
 
-\end{alltt}
+\end{lstlisting}
 \noindent
 While some situations would work with the \cpp{\{unexpect, ...\}} syntax, using \cpp{make_unexpected} makes the programmer's intention as clear and less cryptic. Compare these:
 
-\begin{alltt}
-expected<vector<int>, int> get1() \{\}
+\begin{lstlisting}
+expected<vector<int>, int> get1() {
   return {unexpect, 1};
-\}
+}
 
-expected<vector<int>, int> get2() \{
+expected<vector<int>, int> get2() {
   return make_unexpected(1);
-\}
+}
 
-expected<vector<int>, int> get3() \{
+expected<vector<int>, int> get3() {
   return expected<vector<int>, int>{unexpect, 1};
-\}
-\end{alltt}
+}
+\end{lstlisting}
 
 The usage of \cpp{make_unexpected} is also a consequence of the adapted model for expected: a discriminated union of \cpp{T} and \cpp{unexpected_type<E>}. While \cpp{make_unexpected(E)} has been chosen because it clearly indicates that we are interested in creating an unexpected \cpp{expected<T,E>} (of unspecified type \cpp{T}), it could be also used to make a ready future with a specific error, but this is outside the scope of this proposal. Note also that the definition of the result type of \cpp{make_unexpected} has an explicitly deleted default constructor. This is in order to enable the reset idiom \cpp{exp2 = \{\}} which would otherwise not work due to the ambiguity when deducing the right-hand side argument.
 
@@ -563,11 +573,11 @@ In order to be as efficient as possible, this proposal includes observers with n
 
 The rational described in \cite{OptionalRev4} for \cpp{optional<T>} applies to \cpp{expected<T,E>} and so, the following example combines initialization and value-checking in a boolean context.
 
-\begin{alltt}
-if (expected<char, error_condition> ch = readNextChar()) \{
+\begin{lstlisting}
+if (expected<char, error_condition> ch = readNextChar()) {
   // ...
-\}
-\end{alltt}
+}
+\end{lstlisting}
 
 \subsubsection{Accessing the contained value}
 %%%%%%%%%%%%%%%%%%
@@ -579,9 +589,9 @@ Even if \cpp{expected<T,E>} has not been used in practice for a while as Boost.O
 
 It was chosen to use indirection operator because, along with explicit conversion to \cpp{bool}, it is a very common pattern for accessing a value that might not be there:
 
-\begin{alltt}
+\begin{lstlisting}
 if (p) use(*p);
-\end{alltt}
+\end{lstlisting}
 
 This pattern is used for all sort of pointers (smart or raw) and \cpp{optional}; it clearly indicates the fact that the value may be missing and that we return a reference rather than a value. The indirection operator has risen some objections because it may incorrectly imply that \cpp{expected} and \cpp{optional} are a (possibly smart) pointer, and thus provides shallow copy and comparison semantics. All library components so far use indirection operator to return an object that is not part of the pointer's/iterator's value. In contrast, \cpp{expected} as well as \cpp{optional} indirects to the part of its own state. We do not consider it a problem in the design; it is more like an unprecedented usage of indirection operator. We believe that the cost of potential confusion is overweighted by the benefit of an intuitive interface for accessing the contained value.
 
@@ -594,21 +604,21 @@ Using the indirection operator for a object that doesn't contain a value is an u
 
 In addition to the indirection operator, we propose the member function value as in \cite{OptionalRev4} that returns a reference to the contained value if one exists or throw an exception otherwise.
 
-\begin{alltt}
-void interact() \{
+\begin{lstlisting}
+void interact() {
   string s;
   cout << "enter number: ";
   cin >> s;
   expected<int, error> ei = str2int(s);
   
-  try \{
+  try {
     process_int(ei.value());
-  \}
-  catch(bad_expected_access<error>) \{
+  }
+  catch(bad_expected_access<error>) {
     cout << "this was not a number.";
-  \}
-\}
-\end{alltt}
+  }
+}
+\end{lstlisting}
 
 The exception thrown depend on the expected error type. By default it throws \cpp{bad_expected_access<E>} (derived from \cpp{logic_error}) which will contain the stored error. In the case of \cpp{expected<T>}, it throws the exception stored in the \cpp{exception_ptr}. An approach enabling customization of this behavior is presented in the section \ref{configurable-expected}.
 
@@ -619,15 +629,15 @@ The exception thrown depend on the expected error type. By default it throws \cp
 
 Usually, accessing the contained error is done once we know the expected object has no value. This is why the \cpp{error()} function has a narrow contract: it works only if \cpp{!(*this)}.
 
-\begin{alltt}
-expected<int, errc> getIntOrZero(istream_range& r)\{
+\begin{lstlisting}
+expected<int, errc> getIntOrZero(istream_range& r) {
   auto r = getInt();  // won't throw
-  if (!r && r.error() == errc::empty_stream)\{
+  if (!r && r.error() == errc::empty_stream) {
     return 0;
-  \}
+  }
   return r;
-\}
-\end{alltt}
+}
+\end{lstlisting}
 
 \noindent
 This behavior could not be obtained with the \cpp{value_or()} method since we want to return 0 only if the error is equal to \cpp{empty_stream}.
@@ -637,16 +647,16 @@ This behavior could not be obtained with the \cpp{value_or()} method since we wa
 
 As the \cpp{error()} function, the \cpp{get_unexpected()} works only if the expected object has no value. It is used to propagate errors. Note that the following equivalences yield:
 
-\begin{alltt}
+\begin{lstlisting}
 f.get_unexpected() == make_unexpected(f.error());
-f.get_unexpected() == expected<T, E>\{unexpect, f.error()\};
-\end{alltt}
+f.get_unexpected() == expected<T, E>{unexpect, f.error()};
+\end{lstlisting}
 
 \noindent
 This member is provided for convenience, it is further demonstrated in the next example:
 
-\begin{alltt}
-expected<pair<int, int>, errc> getIntRange(istream_range& r) \{
+\begin{lstlisting}
+expected<pair<int, int>, errc> getIntRange(istream_range& r) {
   auto f = getInt(r);
   if (!f) return f.get_unexpected();
 
@@ -657,8 +667,8 @@ expected<pair<int, int>, errc> getIntRange(istream_range& r) \{
   if (!l) return l.get_unexpected();
 
   return std::make_pair(*f, *l);
-\}
-\end{alltt}
+}
+\end{lstlisting}
 
 \cpp{get_unexpected} is also provided for symmetry purpose. On one side, there is an implicit conversion from \cpp{unexpected<E>} to \cpp{expected<T,E>} and on the other side there is an explicit conversion from \cpp{expected<T,E>} to \cpp{unexpected<E>}. A more pleasant function manipulating error is \cpp{catch_error(F)} and is explained in the monadic operations in section \ref{monadic-operations}.
 
@@ -667,10 +677,10 @@ expected<pair<int, int>, errc> getIntRange(istream_range& r) \{
 
 The function member \cpp{value_or()} has the same semantics than \cpp{optional}\cite{OptionalRev4} since the type of \cpp{E} doesn't matter; hence we can consider that \cpp{E == nullopt_t} and the optional semantics yields. Using the monadic interface, we can achieve a similar behavior:
 
-\begin{alltt}
+\begin{lstlisting}
 auto x = getInt();
 int x = *(x.catch_error([](auto){return 0;})); // identical to x.value_or(0);
-\end{alltt}
+\end{lstlisting}
 
 \subsubsection{Relational operators}
 %%%%%%%%%%%%%%%%%%
@@ -728,7 +738,6 @@ Unexpected values could have been as well considered greater than any value of \
 Given that both \cpp{unexpected_type<E>} and \cpp{T} are implicitly convertible to \cpp{expected<T,E>}, this implies the existence and semantics of mixed comparison between \cpp{expected<T,E>} and \cpp{T}, as well as between \cpp{expected<T,E>} and \cpp{unexpected_type<E>}:
 
 \begin{lstlisting}
-assert (eN == make_unexpected(1));
 assert (e0 != make_unexpected(1));
 assert (eN != 1);
 assert (e1 == 1);
@@ -783,11 +792,11 @@ Reseting the value of \cpp{expected<T,E>} is similar to \cpp{optional<T>} but in
 
 This proposal makes use of the "in-place" tag defined in \cite{OptionalRev5}. This proposal  provides the same kind of "in-place" constructor that forwards (perfectly) the arguments provided to \cpp{expected}'s constructor into the constructor of \cpp{T}. In order to trigger this constructor one has to use the tag struct \cpp{in_place}. We need the extra tag to disambiguate certain situations, like calling \cpp{expected}'s default constructor and requesting \cpp{T}'s default construction:
 
-\begin{alltt}
-expected<Big, error> eb\{in_place, "1"\}; // calls Big\{"1"\} in place (no moving)
-expected<Big, error> ec\{in_place\};      // calls Big\{\} in place (no moving)
-expected<Big, error> ed\{\};              // calls error\{\} (unexpected state)
-\end{alltt}
+\begin{lstlisting}
+expected<Big, error> eb{in_place, "1"}; // calls Big{"1"} in place (no moving)
+expected<Big, error> ec{in_place};      // calls Big{} in place (no moving)
+expected<Big, error> ed{};              // calls error{} (unexpected state)
+\end{lstlisting}
 
 
 \subsubsection{Tag \cpp{unexpect}}
@@ -795,10 +804,10 @@ expected<Big, error> ed\{\};              // calls error\{\} (unexpected state)
 
 This proposal provides an "unexpect" constructor that forwards (perfectly) the arguments provided to \cpp{expected}'s constructor into the constructor of \cpp{E}. In order to trigger this constructor one has to use the tag struct \cpp{unexpect}. We need the extra tag to disambiguate certain situations, notably if \cpp{T == E}.
 
-\begin{alltt}
-expected<Big, error> eb\{unexpect, "1"\}; // calls error\{"1"\} in place (no moving)
-expected<Big, error> ec\{unexpect\};      // calls error\{\} in place (no moving)
-\end{alltt}
+\begin{lstlisting}
+expected<Big, error> eb{unexpect, "1"}; // calls error{"1"} in place (no moving)
+expected<Big, error> ec{unexpect};      // calls error{} in place (no moving)
+\end{lstlisting}
 
 In order to make the tag uniform an additional "expect" constructor could be provided but this proposal doesn't propose it.
 
@@ -883,20 +892,20 @@ This behavior is left open in the section \ref{configurable-expected}. Currently
 
 This last member function is used when we want to use or recover from an error. When chaining multiple \cpp{bind} or \cpp{map} operations we don't know if the operations have succeeded. A common way is thus to add a \cpp{catch_error} at the end and act in consequence.
 
-\begin{alltt}
+\begin{lstlisting}
 getInt().map([](int i){return i * 2;})
         .map(integer_divide_by_2)
         .catch_error(log_error);
-\end{alltt}
+\end{lstlisting}
 
 \noindent
 Here the last operation is simply used to log the error but the \cpp{catch_error} also accepts function that try to recover from a previous error.
 
-\begin{alltt}
+\begin{lstlisting}
 getInt().map([](int i){return i * 2;})
         .map(integer_divide_by_2)
         .catch_error([](auto e) { return 0; });
-\end{alltt}
+\end{lstlisting}
 \noindent
 This last example shows we can return a new value from the continuation passed to \cpp{catch_error}.
 \newline
@@ -908,18 +917,18 @@ The \cpp{catch_error} member doesn't catch exceptions that could be thrown by th
 
 In some scenarios, you might want to create an \cpp{expected} that returns another \cpp{expected}, resulting in nested expected. It is possible to write simple code to unwrap the outer \cpp{expected} and retrieve the nested \cpp{expected} and its result with the current interface as in:
 
-\begin{alltt}
+\begin{lstlisting}
 template <class T, class E>
-expected<T,E> unwrap<expected<expected<T,E>,E> ee) \{
+expected<T,E> unwrap<expected<expected<T,E>,E> ee) {
 
   if (ee) return *ee;
   return ee.get_unexpected();
-\}
+}
 template <class T, class E>
-expected<T,E> unwrap<expected<T,E>> e) \{ 
+expected<T,E> unwrap<expected<T,E>> e) { 
   return e;
-\}
-\end{alltt}
+}
+\end{lstlisting}
 
 We could add such a function to the standard, either as a free function or as a member function. The authors propose to add it as a member function to be in line with \cite{ImprovementsAsync}.
 
@@ -971,23 +980,23 @@ The table \ref{comp-variant} presents a brief comparison between \cpp{boost::var
 
 We can see \cpp{expected<T,E>} as an \cpp{std::experimental::optional<T>} that collapse all the values of \cpp{E} to \cpp{nullopt}. We can convert an \cpp{expected<T,E>} to an \cpp{optional<T>} with the possible loss of information.
 
-\begin{alltt}
+\begin{lstlisting}
 template <class T>
-optional<T> make_optional(expected<T,E> v) \{
+optional<T> make_optional(expected<T,E> v) {
   if (v) return make_optional(*v);
   else nullopt;
-\}
-\end{alltt}
+}
+\end{lstlisting}
 \noindent
 We can convert an \cpp{optional<T>} to an \cpp{expected<T,E>} without knowledge of the root cause. We consider that \cpp{E()} is equal to \cpp{nullopt} since it shouldn't bring more informations (however it depends on the underlying error --- we considered \cpp{exception_ptr} and \cpp{error_condition}).
 
-\begin{alltt}
+\begin{lstlisting}
 template <class T, class E>
-expected<T,E> make_expected(optional<T> v) \{
+expected<T,E> make_expected(optional<T> v) {
   if (v) return make_expected(*v);
   else make_unexpected(E());
-\}
-\end{alltt}
+}
+\end{lstlisting}
 
 \subsection{Promise and Future}
 %%%%%%%%%%%%%%%%%
@@ -995,33 +1004,33 @@ expected<T,E> make_expected(optional<T> v) \{
 We can see \cpp{expected<T>} as an always ready \cpp{future<T>}. While \cpp{promise<>}/\cpp{future<>} focuses on inter-thread asynchronous communication, \cpp{excepted<E,T>} focus on eager and synchronous computations.
 We can move a ready \cpp{future<T>} to an \cpp{expected<T>} with no loss of information. 
 
-\begin{alltt}
+\begin{lstlisting}
 template <class T>
-expected<T> make_expected(future<T>&& f) \{
+expected<T> make_expected(future<T>&& f) {
   assert (f.ready() && "future not ready");
-  try \{
+  try {
     return f.get();
-  \} catch (...) \{
+  } catch (...) {
     return make_unexpected_from_exception();
-  \}
-\}
-\end{alltt}
+  }
+}
+\end{lstlisting}
 \noindent
 We can also create a \cpp{future<T>} from an \cpp{expected<T>}.
 
-\begin{alltt}
+\begin{lstlisting}
 template <class T>
-future<T> make_ready_future(expected<T> e) \{
+future<T> make_ready_future(expected<T> e) {
   if (e) 
     return make_ready_future(*e);
   else 
     return make_unexpected_future<T>(e.error()); 
-\}
-\end{alltt}
+}
+\end{lstlisting}
 \noindent
 where \cpp{make_unexpected_future} is defined as:
 
-\begin{alltt}
+\begin{lstlisting}
 template <class T, class E>
 constexpr future<T> make_unexpected_future(E e)  {
   promise<T> p;
@@ -1029,16 +1038,16 @@ constexpr future<T> make_unexpected_future(E e)  {
   p.set_exception(e);
   return move(f);
 }
-\end{alltt}
+\end{lstlisting}
 \noindent
 We can combine them as follows:
 
-\begin{alltt}
+\begin{lstlisting}
 fut.then([](future<int> f) { 
   return make_ready_future(
     make_expected(f).bind([](i){ ... }).catch_error(...));
   });
-\end{alltt}
+\end{lstlisting}
 
 As for the \cpp{future<T>} proposal, \cpp{expected<T,E>} provides also a way to visit the stored values.
 \cpp{future<T>} provides a \cpp{then()} function that accepts a continuation having the \cpp{future<T>} as parameter. The synchronous nature of expected makes it easier to use two functions, one to manage with the case expected has a value and one to try to recover otherwise. This is more in line with the monad interface, as any function having a \cpp{T} as parameter can be used as parameter of the apply function, no need to have a \cpp{expected<T,E>}. This make it easier to reuse functions. 
@@ -1104,14 +1113,14 @@ In the use-cases section (\ref{divide-example}), we present expected as a better
 
 A first solution that do not require change in the language is the use of variadic monadic operation. For example using a variadic free function \cpp{map}, we can write the $i/k + j/k$ function as following:
 
-\begin{alltt}
+\begin{lstlisting}
 expected<int> f(int i, int j, int k)
-\{
+{
   return map(plus,
     safe_divide(i, k), 
     safe_divide(j, k));
-\}
-\end{alltt}
+}
+\end{lstlisting}
 
 This is most readable than the member \cpp{map} function and the use of lambda. However it suffers from two major deficiencies:
 
@@ -1122,75 +1131,75 @@ This is most readable than the member \cpp{map} function and the use of lambda. 
 
 Considering these two problems we consider a possible C++ language extension: a do-notation similar to the one in Haskell. As with the variadic \cpp{map} function, it is not limited to \cpp{expected} but could work with any kind of monad. Next follow the grammar:
 
-\begin{alltt}
+\begin{lstlisting}
 expression ::= ...
             | do-expression
 do-expression ::= do-initialization ':' expression
 do-initialization ::= type var '<-' expression
-\end{alltt}
+\end{lstlisting}
 
 \noindent
 The previous function could be rewritten as:
 
-\begin{alltt}
+\begin{lstlisting}
 expected<int, error_condition> f2(int i, int j, int k)
-\{
+{
   return (
     auto s1 <- safe_divide(i, k) :
     auto s2 <- safe_divide(j, k) :
     s1 + s2
   );
-\}
-\end{alltt}
+}
+\end{lstlisting}
 
 This syntax is far easier to read and to understand. A lazy evaluation of statement is possible and the order is well-defined. Nevertheless, it can be considered as a syntactic sugar for \cpp{bind}. We give a syntactic transformation following:
 
-\begin{alltt}
+\begin{lstlisting}
 [[do-expression]] =
   bind(expression, [&](type var) {
     return [[do-expression-or-expression]]
   });
-\end{alltt}
+\end{lstlisting}
 \noindent
 The transformed code of the previous function is:
 
-\begin{alltt}
+\begin{lstlisting}
 expected<int, error_condition> f2(int i, int j, int k)
-\{
-  return bind(safe_divide(i, k) ,[=](auto s1) \{
-    return bind(safe_divide(j, k),[=](auto s2) \{
+{
+  return bind(safe_divide(i, k) ,[=](auto s1) {
+    return bind(safe_divide(j, k),[=](auto s2) {
       return s1 + s2;
-    \});
-  \}); 
-\}
-\end{alltt}
+    });
+  }); 
+}
+\end{lstlisting}
 
 This would give the exact same results as the previous version. However, the function \cpp{f2} is much simpler and clearer than \cpp{f} because it doesn't have to explicitly handle any of the error cases. When an error case occurs, it is returned as the result of the function, but if not, the correct result of a subexpression is bound to a name (\cpp{s1} or \cpp{s2}), and that result can be used in later parts of the computation. The code is a lot simpler to write. The more complicated the error-handling function, the more important this will be.
 
 But, the standard doesn't have this DO expression yet.
 Waiting for a do-statement the user could define some macros and define \cpp{f2} as
 
-\begin{alltt}
+\begin{lstlisting}
 expected<int> f2(int i, int j, int k)
-\{
+{
     return DO (
          ( s1, safe_divide(i, k) )
          ( s2, safe_divide(j, k) )
          s1 + s2 
     );
-\}
-\end{alltt}
+}
+\end{lstlisting}
 
 In the case of expected and optional, and similarly to the proposed \cpp{await} keyword we could use an \cpp{expect} keyword (it returns if the expected is not valued):
 
-\begin{alltt}
+\begin{lstlisting}
 expected<int> f2(int i, int j, int k)
-\{
+{
   EXPECT(s1, safe_divide(i, k));
   EXPECT(s2, safe_divide(j, k));
   return s1 + s2;
-\}
-\end{alltt}
+}
+\end{lstlisting}
 
 Note that this meaning of EXPECT is not valid for the list monad. 
 
@@ -1201,51 +1210,51 @@ Expected might be configurable through a trait \cpp{expected_traits}. The first 
 
 The other variation point is the behavior triggered when the continuation argument of \cpp{bind} or \cpp{map} throws an exception. If the exception thrown is \cpp{system_error} and the error type is \cpp{error_code}, we might want to store the error carried by the exception. Without more discussion, let's show how we could customize \cpp{expected<T, E>}, consider the following exception-oriented function:
 
-\begin{alltt}
-class error_cond : public std::exception \{
+\begin{lstlisting}
+class error_cond : public std::exception {
   // Implementation similar to system_error but for error_condition here.
-\};
+};
 
 int safe_divide(int i, int j)
-\{
+{
   if (j == 0) 
     throw error_cond(error_condition(arithmetic_errc::divide_by_zero));
   return i/j;
-\}
-\end{alltt}
+}
+\end{lstlisting}
 
 \noindent
 Imagine \cpp{j} encapsulated into an \cpp{expected}, you will call \cpp{map} with \cpp{safe_divide} as the continuation. Let's see what it looks like:
 
-\begin{alltt}
+\begin{lstlisting}
 expected<int, error_condition> f(int i, const expected<int, error_condition>& j)
-\{
+{
   return j.map(bind(safe_divide, i, _1));
-\}
-\end{alltt}
+}
+\end{lstlisting}
 
 \noindent
 If we specialize \cpp{expected_traits} for \cpp{error_condition}, we can achieve the expected behavior:
 
-\begin{alltt}
+\begin{lstlisting}
 template <class T>
 struct expected_traits<expected<T, error_condition>>
-\{
+{
   static expected<T, error_condition> catch_exception(exception_ptr e)
-  \{
-    try\{
+  {
+    try {
       rethrow_exception(e);
-    \} catch(const error_cond& e) \{
+    } catch(const error_cond& e) {
       return make_unexpected(e.code());
-    \}
-  \}
+    }
+  }
 
   static void bad_access(const error_type &e)
-  \{
+  {
     throw error_cond(e);
-  \}
-\};
-\end{alltt}
+  }
+};
+\end{lstlisting}
 
 The semantics of \cpp{catch_exception} is to rethrow the current exception and catch only the exceptions we are interested in. The default behavior let flight the exception thrown by the continuation. We created a bridge between an \cpp{error_condition} and the \cpp{error_cond} exception.
 
@@ -1254,10 +1263,10 @@ The semantics of \cpp{catch_exception} is to rethrow the current exception and c
 
 As \cpp{optional<T>},  \cpp{expected<T,E>} does not allocate memory. So it can do without allocators. However, it can be useful in compound types like:
 
-\begin{alltt}
+\begin{lstlisting}
 typedef vector<expected<vector<int, MyAlloc>, error>, MyAlloc> MyVec;
-MyVec v\{ v2, MyAlloc\{\} \};
-\end{alltt}
+MyVec v{ v2, MyAlloc{} };
+\end{lstlisting}
 
 \noindent
 One could expect that the allocator argument is forwarded in this constructor call to the nested vectors that use the same allocator. Allocator support would enable this. \cpp{std::tuple} offers this functionality.
@@ -1269,82 +1278,82 @@ It has been suggested to let the user decide the Exception that would be throw w
 
 While there is no major complexity doing it, as it just needs a third parameter that could default to the appropriated class, 
 
-\begin{alltt}
+\begin{lstlisting}
 template <class T, class Error, class Exception = bad_expected_access>
   struct expected;
-\end{alltt}
+\end{lstlisting}
 
 \noindent
 The authors consider that this is not really needed and that this parameter should not really be part of the type.
 
 The user could use \cpp{value_or_throw()} 
 
-\begin{alltt}
+\begin{lstlisting}
 expected<int, std::error_code> f();
 expected<int, std::error_code> e = f();
 auto i = e.value_or_throw<std::system_error>();  
-\end{alltt}
+\end{lstlisting}
 
 \noindent
 where 
 
-\begin{alltt}
+\begin{lstlisting}
 template <class Exception, class T, class E>
 constexpr value_type value_or_throw(expected<T,E>& e) const&
-\{
+{
   return *this
     ? move(**this)
     : throw Exception(e.error());
-\}
-\end{alltt}
+}
+\end{lstlisting}
 
 \noindent
 A class like this one could be added to the standard, but this proposal doesn't request it. 
 
 The user can also wrap the proposed class in its own expected class
 
-\begin{alltt}
+\begin{lstlisting}
 template <class T, class Error=std::error_code, class Exception=std::system_error>
-struct MyExpected \{
+struct MyExpected {
   expected <T,E> v;
-  MyExpected(expected <T,E> v) : v(v) \{\}
-  T value() \{  
+  MyExpected(expected <T,E> v) : v(v) {}
+  T value() {  
     if (e) return v.value();
     else throw Exception(v.error());
-  \}
+  }
   ...
-\};
-\end{alltt}
+};
+\end{lstlisting}
 
 \noindent
 and use it as
 
-\begin{alltt}
+\begin{lstlisting}
 expected<int, std::error_code> f();
 MyExpected<int> e = f();
 auto i = e.value();  // std::system_error throw if not valid
-\end{alltt}
+\end{lstlisting}
 
 \noindent
 A class like this one could be added to the standard, but this proposal doesn't request it. 
 
 An alternative could be to add a specialization on a error class that gives the storage and the exception to thrown.
 
-\begin{alltt}
+\begin{lstlisting}
 template <class Error, class Exception>
   struct error_exception {
     typedef Error error_type;
     typedef Exception exception_type;
   };
-\end{alltt}
+\end{lstlisting}
 
 \noindent
 that could be used as follows
 
-\begin{alltt}
+\begin{lstlisting}
 expected<T, std::error_exception<std::error_code, std::system_error>> e = make_unexpected(err);
 e.value(); // will throw std::system_error(err);
-\end{alltt}
+\end{lstlisting}
 
 A class like this one could be added to the standard, but this proposal doesn't request it. 
 
@@ -1396,10 +1405,10 @@ Should the implicit conversion be allowed in this case?
 
 The following call in (1) is undefined behavior. Should a specific exception be thrown?
 
-\begin{alltt}
+\begin{lstlisting}
 expected<int> e;
 e.value(); // (1)
-\end{alltt}
+\end{lstlisting}
 
 \subsection{Should \cpp{map}/\cpp{bind}/\cpp{then} catch the exceptions throw by the continuation?}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1419,26 +1428,26 @@ It has been argued that the error should be always available and that often ther
 
 \cpp{expected<T,E>} would be seen more like something  
 
-\begin{alltt}
+\begin{lstlisting}
 struct { E; optional<T> }. 
-\end{alltt}
+\end{lstlisting}
 
 \noindent
 The following code was show as use case
 
-\begin{alltt}
+\begin{lstlisting}
 auto e = function();
 switch (e.status()) {
   success: ....; break;
   too_green: ....; break;
   too_pink: ....; break;
 } 
-\end{alltt}
+\end{lstlisting}
 
 \noindent
 With the current interface the user could be tempted to do
 
-\begin{alltt}
+\begin{lstlisting}
 auto e = function();
 if (e) {
   /*success:*/ ....;
@@ -1448,30 +1457,30 @@ if (e) {
   case too_pink: ....; break;
   }
 } 
-\end{alltt}
+\end{lstlisting}
 
 \noindent
 This could be done with the current interface as follows
 
-\begin{alltt}
+\begin{lstlisting}
 auto e = function();
 switch (error_or(e, success)) {
   success: ....; break;
   too_green: ....; break;
   too_pink: ....; break;
 } 
-\end{alltt}
+\end{lstlisting}
 
 \noindent
 where
 
-\begin{alltt}
+\begin{lstlisting}
 template <class E, class T>
-E error_or(expected<T,E> const&, E err) \{
+E error_or(expected<T,E> const&, E err) {
   if(e) return err;
   else return error();
-\}
-\end{alltt}
+}
+\end{lstlisting}
 
 \noindent
 Do we need to add such a \cpp{error_or} function? as member? 
@@ -1481,36 +1490,36 @@ Do we need to add such a \cpp{error_or} function? as member?
 
 An other use case which could look much uglier is if the user had to test for whether or not there was a status.
 
-\begin{alltt}
+\begin{lstlisting}
   e = function();
   while ( e.status == timeout ) {
     sleep(delay);
     delay *=2;
   }
-\end{alltt}
+\end{lstlisting}
 
 \noindent
 Here we have a value or a hard error.  
 This use case would need to use something like \cpp{has_error}
 
-\begin{alltt}
+\begin{lstlisting}
   e = function();
   while ( has_error(e, timeout) ) {
     sleep(delay);
     delay *=2;
   }
-\end{alltt}
+\end{lstlisting}
 
 \noindent
 where
 
-\begin{alltt}
+\begin{lstlisting}
 template <class T, class E>
-bool has_error(expected<T,E> const&, E err) \{
+bool has_error(expected<T,E> const&, E err) {
   if (e) return false;
   else return error()==err;
-\}
-\end{alltt}
+}
+\end{lstlisting}
 
 Do we need to add such a \cpp{has_error} function? as member? 
 
@@ -1535,7 +1544,7 @@ This subclause describes class template \cpp{unexpected_type} that wraps objects
 \wordingSubSec{Header <experimental/unexpected> synopsis}{unexpected.synop}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\begin{lstlisting}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 namespace std {
 namespace experimental {
 inline namespace fundamentals_v2 {
@@ -1559,7 +1568,7 @@ A program that necessitates the instantiation of template \cpp{unexpected_type} 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % unexpected_type object type
-\begin{lstlisting}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class E=std::exception_ptr>
 class unexpected_type {
 public:
@@ -1573,8 +1582,8 @@ private:
 \end{lstlisting}
 
 % unexpected_type constructor from underlying.
-\begin{lstlisting}
-    constexpr explicit unexpected_type(E const&);   
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
+constexpr explicit unexpected_type(E const&);   
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
@@ -1583,8 +1592,8 @@ Build an unexpected by copying the parameter to the internal storage \cpp{val}.
 \end{wordingPara}
 
 % unexpected_type move constructor from underlying.
-\begin{lstlisting}
-    constexpr explicit unexpected_type(E &&);   
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
+constexpr explicit unexpected_type(E &&);   
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
@@ -1593,8 +1602,8 @@ Build an unexpected by moving the parameter to the internal storage \cpp{val}.
 \end{wordingPara}
 
 % unexpected_type constructor from underlying.
-\begin{lstlisting}
-    constexpr E const& value() const;                              
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
+constexpr E const& value() const;                              
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
@@ -1605,7 +1614,7 @@ Build an unexpected by moving the parameter to the internal storage \cpp{val}.
 \wordingSubSec{Unexpected exception_ptr specialization}{unexpected.exception_ptr}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\begin{lstlisting}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <>
 class unexpected_type<std::exception_ptr> {
 public:
@@ -1622,8 +1631,8 @@ private:
 \noindent
 
 % unexpected_type constructor from underlying.
-\begin{lstlisting}
-    constexpr explicit unexpected_type(exception_ptr const&);   
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
+constexpr explicit unexpected_type(exception_ptr const&);   
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
@@ -1632,8 +1641,8 @@ Build an unexpected by copying the parameter to the internal storage \cpp{val}.
 \end{wordingPara}
 
 % unexpected_type move constructor from underlying.
-\begin{lstlisting}
-    constexpr explicit unexpected_type(exception_ptr &&);   
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
+constexpr explicit unexpected_type(exception_ptr &&);   
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
@@ -1642,8 +1651,8 @@ Build an unexpected by moving the parameter to the internal storage \cpp{val}.
 \end{wordingPara}
 
 % unexpected_type constructor from an Exception.
-\begin{lstlisting}
-    constexpr explicit unexpected_type(E e);   
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
+constexpr explicit unexpected_type(E e);   
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
@@ -1652,8 +1661,8 @@ Build an unexpected storing the result of \cpp{val(make_exception_ptr(e))}.
 \end{wordingPara}
 
 % unexpected_type constructor from underlying.
-\begin{lstlisting}
-    constexpr exception_ptr const& value() const;                              
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
+constexpr exception_ptr const& value() const;                              
 \end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
@@ -1664,7 +1673,7 @@ Build an unexpected storing the result of \cpp{val(make_exception_ptr(e))}.
 \wordingSubSec{Factories}{unexpected.factories}
 
 % make_unexpected  factory.
-\begin{lstlisting}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class E>
 constexpr unexpected_type<decay_t<E>> make_unexpected(E&& v);
 \end{lstlisting}
@@ -1675,7 +1684,7 @@ constexpr unexpected_type<decay_t<E>> make_unexpected(E&& v);
 \end{wordingPara}
 
 % make_unexpected  factory.
-\begin{lstlisting}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 constexpr unexpected_type<std::exception_ptr> make_unexpected_from_current_exception();
 \end{lstlisting}
 \begin{wordingPara}
@@ -1697,7 +1706,7 @@ This subclause describes class template expected that represents expected object
 \wordingSubSec{Header <experimental/expected> synopsis}{expected.synop}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\begin{lstlisting}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 namespace std {
 namespace experimental {
 inline namespace fundamentals_v2 {
@@ -1708,18 +1717,10 @@ inline namespace fundamentals_v2 {
   class expected;
   // \ref{expected.object.void}, Specialization for void.  
   template <class E>
-\end{lstlisting}
-\begin{alltt}
   class expected<void, E>;
-\end{alltt}
-\begin{lstlisting}
   // \ref{expected.object.meta}, Specialization of expected as a meta-function : T-> expected<T,E>.  
   template <class E>
-\end{lstlisting}
-\begin{alltt}
   class expected<holder, E>;
-\end{alltt}
-\begin{lstlisting}
    
   // \ref{expected.unexpect}, unexpect tag
   struct unexpect_t{};
@@ -1730,8 +1731,6 @@ inline namespace fundamentals_v2 {
  
   
   // \ref{expected.relational_op}, Expected relational operators
-\end{lstlisting}
-\begin{alltt}
   template <class T, class E>
     constexpr bool operator==(const expected<T,E>&, const expected<T,E>&);
   template <class T, class E>
@@ -1744,12 +1743,8 @@ inline namespace fundamentals_v2 {
     constexpr bool operator<=(const expected<T,E>&, const expected<T,E>&);
   template <class T, class E>
     constexpr bool operator>=(const expected<T,E>&, const expected<T,E>&);
-\end{alltt}
-\begin{lstlisting}
     
-  // \ref{expected.comparison_T}, Comparison with T
-\end{lstlisting}
-\begin{alltt}
+  // \ref{expected.comparison_T}, Comparison with T 
   template <class T, class E> constexpr bool operator==(const expected<T,E>&, const T&);
   template <class T, class E> constexpr bool operator==(const T&, const expected<T,E>&);
   template <class T, class E> constexpr bool operator!=(const expected<T,E>&, const T&);
@@ -1762,12 +1757,8 @@ inline namespace fundamentals_v2 {
   template <class T, class E> constexpr bool operator>(const T&, const expected<T,E>&);
   template <class T, class E> constexpr bool operator>=(const expected<T,E>&, const T&);
   template <class T, class E> constexpr bool operator>=(const T&, const expected<T,E>&);
-\end{alltt}
-\begin{lstlisting}
 
   // \ref{expected.comparison_unexpected_E}, Comparison with unexpected_type<E>
-\end{lstlisting}
-\begin{alltt}
   template <class T, class E> constexpr bool operator==(const expected<T,E>&, const unexpected<E>&);
   template <class T, class E> constexpr bool operator==(const unexpected<E>&, const expected<T,E>&);
   template <class T, class E> constexpr bool operator!=(const expected<T,E>&, const unexpected<E>&);
@@ -1781,19 +1772,11 @@ inline namespace fundamentals_v2 {
   template <class T, class E> constexpr bool operator>=(const expected<T,E>&, const unexpected<E>&);
   template <class T, class E> constexpr bool operator>=(const unexpected<E>&, const expected<T,E>&);
 
-\end{alltt}
-\begin{lstlisting}
   // \ref{expected.specalg}, Specialized algorithms
-\end{lstlisting}
-\begin{alltt}
     void swap(expected<E,T>&, expected<E,T>&) noexcept(see below);
     void swap(expected<T,E>&, expected<T,E>&) noexcept(see below);
 
-\end{alltt}
-\begin{lstlisting}
   // \ref{expected.factories}, Factories
-\end{lstlisting}
-\begin{alltt}
   template <class T> constexpr expected<decay_t<T>> make_expected(T&& v);
   expected<void> make_expected();
   template <class E> expected<void, E> make_expected();
@@ -1812,15 +1795,9 @@ inline namespace fundamentals_v2 {
    constexpr expected<typename result_type<F>::type>
    make_expected_from_call(F f);
 
-\end{alltt}
-\begin{lstlisting}
   // \ref{expected.hash}, hash support
-\end{lstlisting}
-\begin{alltt}
   template <class T> struct hash;
   template <class T> struct hash<expected<T,E>>;
-\end{alltt}
-\begin{lstlisting}
 }}}
 \end{lstlisting}
 
@@ -1835,7 +1812,7 @@ An instance of \cpp{expected<T,E>} is said to be unexpected if it contains an ob
 \wordingSubSec{expected for object types}{expected.object}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\begin{lstlisting}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 
   template <class T, class E>
   class expected
@@ -1846,11 +1823,7 @@ An instance of \cpp{expected<T,E>} is said to be unexpected if it contains an ob
     
     template <class U>
     struct rebind {
-\end{lstlisting}
-\begin{alltt}
       typedef expected<U, error_type> type;
-\end{alltt}
-\begin{lstlisting}
     };
     
      // \ref{expected.object.ctor}, constructors
@@ -1918,9 +1891,6 @@ An instance of \cpp{expected<T,E>} is said to be unexpected if it contains an ob
     template 'see below' unwrap() &&;
 
     // \ref{expected.object.factories}, factories
-\end{lstlisting}
-\begin{alltt}
-
     template <typename Ex, typename F>
     expected<T,E> catch_exception(F&& f);
 
@@ -1932,8 +1902,6 @@ An instance of \cpp{expected<T,E>} is said to be unexpected if it contains an ob
       expected<T,E> catch_error(F&& f);
     template <typename F>
       'see below' then(F&& func);
-\end{alltt}
-\begin{lstlisting}
   
   private:
     bool has_value;    // exposition only
@@ -1958,9 +1926,9 @@ Members \cpp{has_value}, \cpp{val} and \cpp{err} are provided for exposition onl
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Default Constructor
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 constexpr expected() noexcept('see below');
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
 Initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the expression \cpp{T()}.
@@ -1984,9 +1952,9 @@ This signature shall not participate in overload resolution unless\\
 \end{wordingPara}
 
 % Copy Constructor
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 expected(const expected& rhs);
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
 If \cpp{bool(rhs)} initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the expression \cpp{*rhs}.\\
@@ -2008,9 +1976,9 @@ This signature shall not participate in overload resolution unless\\
 \end{wordingPara}
 
 % Move Constructor
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 expected(expected && rhs) noexcept('see below');
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
 If \cpp{bool(rhs)} initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the expression \cpp{std::move(*rhs)}. \\
@@ -2038,9 +2006,9 @@ This signature shall not participate in overload resolution unless\\
 \end{wordingPara}
 
 % Value Constructor
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 constexpr expected(const T& v);
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
 Initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the expression \cpp{v}.
@@ -2061,9 +2029,9 @@ This signature shall not participate in overload resolution unless\\
 \end{wordingPara}
 
 % Move value constructor
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 constexpr expected(T&& v); 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
 Initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the expression \cpp{std::move(v)}.
@@ -2084,10 +2052,10 @@ This signature shall not participate in overload resolution unless\\
 \end{wordingPara}
 
 % Emplace constructor
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class... Args>
 constexpr explicit expected(in_place_t, Args&&... args); 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
 Initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the arguments \cpp{std::forward<Args>(args)...}.
@@ -2108,10 +2076,10 @@ This signature shall not participate in overload resolution unless\\
 \end{wordingPara}
 
 % Emplace constructor with initializer list.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class U, class... Args>
 constexpr explicit expected(in_place_t, initializer_list<U> il, Args&&... args); 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
 Initializes the contained value as if direct-non-list-initializing an object of type \cpp{T} with the arguments \cpp{il, std::forward<Args>(args)...}.
@@ -2138,9 +2106,9 @@ This signature shall not participate in overload resolution unless\\
 
 
 % Unexpected Constructor
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 constexpr expected(unexpected_type<E> const& e);
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
 Initializes the unexpected value as if direct-non-list-initializing an object of type \cpp{E} with the expression \cpp{e.value()}.
@@ -2161,9 +2129,9 @@ This signature shall not participate in overload resolution unless\\
 \end{wordingPara}
 
 % Unexpected move constructor
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 constexpr expected(unexpected_type<E>&& e); 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
 Initializes the unexpected value as if direct-non-list-initializing an object of type \cpp{E} with the expression \cpp{std::move(e.value())}.
@@ -2187,9 +2155,9 @@ This signature shall not participate in overload resolution unless\\
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Destructor.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 ~expected();
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
 If \cpp{is_trivially_destructible<T>::value != true} and \cpp{bool(*this)}, calls \cpp{val->T::~T()}.\\
@@ -2204,9 +2172,9 @@ If \cpp{is_trivially_destructible<T>::value} and \cpp{is_trivially_destructible<
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Copy assignment operator.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 expected<T,E>& operator=(const expected<T,E>& rhs); 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
 if \cpp{bool(*this)} and \cpp{bool(rhs)}, assigns \cpp{*rhs} to the contained value \cpp{val}, otherwise \\
@@ -2234,9 +2202,9 @@ This signature shall not participate in overload resolution unless\\
 \end{wordingPara}
 
 % Move assignment operator.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 expected<T,E>& operator=(expected<T,E>&& rhs) noexcept(/*see below*/); 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
 if \cpp{bool(*this)} and \cpp{rhs} is values, assigns \cpp{std::move(*rhs)} to the contained value \cpp{val}, otherwise \\
@@ -2270,10 +2238,10 @@ This signature shall not participate in overload resolution unless\\
 \end{wordingPara}
 
 % Value assignment operator.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class U>
 expected<T,E>& operator=(U&& v); 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
 If \cpp{bool(*this)} assigns \cpp{std::forward<U>(v)} to the contained value; otherwise destroys the contained value by calling \cpp{err->E::~E()} and initializes the unexpected value as if direct-non-list-initializing object of type \cpp{T} with \cpp{std::forward<U>(v)}.
@@ -2298,9 +2266,9 @@ The reason to provide such generic assignment and then constraining it so that e
 \end{wordingPara}
 
 % unexpected assignment operator.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 expected<T,E>& operator=(unexpected_type<E>&& e); 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
 If \cpp{! *this} assigns \cpp{std::forward<E>(e.value())} to the contained value; otherwise destroys the contained value by calling \cpp{val->T::~T()} and initializes the contained value as if direct-non-list-initializing object of type \cpp{E} with \cpp{std::forward<unexpected_type<E>>(e).value()}.
@@ -2322,10 +2290,10 @@ This signature shall not participate in overload resolution unless\\
 \end{wordingPara}
 
 % Emplace assignment.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class... Args>
 void emplace(Args&&... args); 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}if \cpp{bool(*this)}, assigns the contained value \cpp{val} as if constructing an object of type \cpp{T} with the arguments \cpp{std::forward<Args>(args)...}, otherwise destroys the contained value by calling \cpp{err->E::~E()} and  initializes the contained value as if constructing an object of type \cpp{T} with the arguments \cpp{std::forward<Args>(args)...}.
 \end{wordingTextItem}
@@ -2345,10 +2313,10 @@ This signature shall not participate in overload resolution unless\\
 \end{wordingPara}
 
 % Emplace with initializer list assignment.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class U, class... Args>
 void emplace(initializer_list<U> il, Args&&... args); 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
 if \cpp{bool(*this)}, assigns the contained value \cpp{val} as if constructing an object of type \cpp{T} with the arguments \cpp{il,std::forward<Args>(args)...}, otherwise 
@@ -2373,9 +2341,9 @@ The function shall not participate in overload resolution unless: \\
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % swap operation.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 void swap(expected<T,E>& rhs) noexcept(/*see below*/); 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 
 \begin{wordingTextItem}{Effects}
@@ -2405,10 +2373,10 @@ LValues of type \cpp{T} shall be swappable, \cpp{is_move_constructible<T>::value
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % -> operator.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 constexpr T const* operator->() const;
 T* operator->(); 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Requires}
 \cpp{bool(*this)}.
@@ -2422,10 +2390,10 @@ Unless \cpp{T} is a user-defined type with overloaded unary operator\&, the firs
 \end{wordingPara}
 
 % * operator.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 constexpr T const& operator *() const&;
 T& operator *() &;
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Requires}
 \cpp{bool(*this)}.
@@ -2439,9 +2407,9 @@ The first function shall be a \cpp{constexpr} function.
 \end{wordingPara}
 
 % && operator*.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 constexpr T&& operator *() &&;
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Requires}
 \cpp{bool(*this)}.
@@ -2455,9 +2423,9 @@ This function shall be a \cpp{constexpr} function.
 \end{wordingPara}
 
 % bool conversion operator.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 constexpr explicit operator bool() noexcept; 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
 \cpp{has_value}.
@@ -2468,11 +2436,11 @@ This function shall be a \cpp{constexpr} function.
 \end{wordingPara}
 
 % value accessor.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 constexpr T const& value() const&;
 T& value() &;
 constexpr T&& value() &&;
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
 \cpp{*val}, \cpp{if bool(*this)}.
@@ -2490,10 +2458,10 @@ The first and third functions shall be \cpp{constexpr} functions.
 \end{wordingPara}
 
 % error accessor.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 constexpr E const& error() const&;
 constexpr E& error() &; 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Requires}
 \cpp{!*this}.
@@ -2507,9 +2475,9 @@ The first function shall be a \cpp{constexpr} function.
 \end{wordingPara}
 
 % error accessor.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 constexpr E&& error() &&; 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Requires}
 \cpp{!*this}.
@@ -2523,10 +2491,10 @@ The first function shall be a \cpp{constexpr} function.
 \end{wordingPara}
 
 % has_exception accessor.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class Ex>
 bool expected<T>::has_exception() const;
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
 \cpp{true} if and only if \cpp{!(*this)} and the stored exception is a base type of \cpp{Ex}.
@@ -2535,9 +2503,9 @@ bool expected<T>::has_exception() const;
 
 
 % unexpected conversion.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 constexpr unexpected<E> get_unexpected() const;
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Requires}
 \cpp{!*this}.
@@ -2548,10 +2516,10 @@ constexpr unexpected<E> get_unexpected() const;
 \end{wordingPara}
 
 % value_or method.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class U>
 constexpr T value_or(U&& v) const&; 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
 \cpp{bool(*this) ? **this : static_cast<T>(std::forward<U>(v))}.
@@ -2573,10 +2541,10 @@ The function shall not participate in overload resolution unless: \\
 \end{wordingPara}
 
 % move value_or.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class U>
 T value_or(U&& v) &&; 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
 \cpp{bool(*this) ? std::move(**this) : static_cast<T>(std::forward<U>(v))}.
@@ -2595,10 +2563,10 @@ The function shall not participate in overload resolution unless: \\
 \end{wordingPara}
 
 % nested copy unwrap.
-\begin{alltt}
-    template <class U, class E>
-    constexpr expected<U,E> expected<expected<U,E>,E>::unwrap() const&;
-\end{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
+template <class U, class E>
+constexpr expected<U,E> expected<expected<U,E>,E>::unwrap() const&;
+\end{lstlisting}
 
 \begin{wordingPara}
 
@@ -2619,10 +2587,10 @@ The function shall not participate in overload resolution unless: \\
 \end{wordingPara}
 
 % copy unwrap.
-\begin{alltt}
-    template <class T, class E>
-    constexpr expected<T,E> expected<T,E>::unwrap() const&;
-\end{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
+template <class T, class E>
+constexpr expected<T,E> expected<T,E>::unwrap() const&;
+\end{lstlisting}
 
 \begin{wordingPara}
 
@@ -2643,10 +2611,10 @@ The function shall not participate in overload resolution unless: \\
 \end{wordingPara}
 
 % nested move unwrap.
-\begin{alltt}
-    template <class U, class E>
-    expected<U,E> expected<expected<U,E>, E>::unwrap() &&;
-\end{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
+template <class U, class E>
+expected<U,E> expected<expected<U,E>, E>::unwrap() &&;
+\end{lstlisting}
 
 \begin{wordingPara}
 
@@ -2667,10 +2635,10 @@ The function shall not participate in overload resolution unless: \\
 \end{wordingPara}
 
 % move unwrap.
-\begin{alltt}
-    template <class T, class E>
-    template expected<T,E> expected<T,E>::unwrap() &&;
-\end{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
+template <class T, class E>
+template expected<T,E> expected<T,E>::unwrap() &&;
+\end{lstlisting}
 
 \begin{wordingPara}
 
@@ -2694,10 +2662,10 @@ The function shall not participate in overload resolution unless: \\
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % catch_exception factory.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class Ex,class F>
 expected<T> expected<T>::catch_exception(F&& func);
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
 if \cpp{has_exception<Ex>()} call the continuation function \cpp{fuct} with the stored exception as parameter.
@@ -2709,10 +2677,10 @@ otherwise, returns \cpp{*this}.
 \end{wordingPara}
 
 % map factory.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class Ex,class F>
 'see below' map(F&& func) 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
 if \cpp{bool(*this)} returns returns \cpp{expected<decltype(func(move(val))), E>(func(move(val)))}, 
@@ -2721,10 +2689,10 @@ otherwise, returns \cpp{get_unexpected()}.
 \end{wordingPara}
 
 % bind factory.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class Ex,class F>
 'see below' bind(F&& func) 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
 if \cpp{bool(*this)} returns returns \cpp{unwrap(expected<decltype(func(move(val))), E>(func(move(val))))}, 
@@ -2733,10 +2701,10 @@ otherwise, returns \cpp{get_unexpected()}.
 \end{wordingPara}
 
 % then factory.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class Ex,class F>
 'see below' then(F&& func);
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
 returns \cpp{unwrap(expected<decltype(func(move(*this))), E>(func(move(*this))))}, 
@@ -2744,10 +2712,10 @@ returns \cpp{unwrap(expected<decltype(func(move(*this))), E>(func(move(*this))))
 \end{wordingPara}
 
 % catch_error factory.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class Ex,class F>
 expected<T,E> catch_error(F&& func);
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
 if \cpp{! (*this)} returns \cpp{unwrap(expected<decltype(func(val)), E>(funct(**this)))}, 
@@ -2759,7 +2727,7 @@ otherwise, returns \cpp{*this}.
 \wordingSubSec{\cpp{expected} as a meta-fuction}{expected.object.meta}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
   template <class E>
   class expected<holder, E>
   {
@@ -2767,26 +2735,24 @@ otherwise, returns \cpp{*this}.
     template <class T>
     using type = expected<T,E>
   };
-\end{alltt}
+\end{lstlisting}
 
 \wordingSubSec{expected for void}{expected.object.void}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
   template <class E>
   class expected<void, E>
-  \{
+  {
   public:
     typedef void value_type;
     typedef E error_type;
     
     template <class U>
-    struct rebind \{
+    struct rebind {
       typedef expected<U, error_type> type;
-    \};
+    };
     
-\end{alltt}
-\begin{lstlisting}
      // \ref{expected.object.void.ctor}, constructors
     constexpr expected() noexcept;
     expected(const expected&);
@@ -2824,8 +2790,6 @@ otherwise, returns \cpp{*this}.
 
     // \ref{expected.object.void.factories}, factories
 
-\end{lstlisting}
-\begin{alltt}
     template <typename Ex, typename F>
     expected<void,E> catch_exception(F&& f);
 
@@ -2835,8 +2799,6 @@ otherwise, returns \cpp{*this}.
       'see below' bind(F&& func) ;
     template <typename F>
       expected<void,E> catch_error(F&& f);
-\end{alltt}
-\begin{lstlisting}
     template <typename F>
       'see below' then(F&& func);
 
@@ -2859,17 +2821,17 @@ otherwise, returns \cpp{*this}.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % unexpect tag
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 struct unexpet_t{};
 constexpr unexpet_t unexpet{};
-\end{alltt}
+\end{lstlisting}
 \noindent
 
 
 \wordingSubSec{Template Class bad_expected_access}{expected.bad_expected_access}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 namespace std {
   template <class E>
   class bad_expected_access : public logic_error {
@@ -2879,14 +2841,14 @@ namespace std {
     error_type& error();
   };
 }
-\end{alltt}
+\end{lstlisting}
 
 The template class \cpp{bad_expected_access} defines the type of objects thrown as exceptions to report the situation where an attempt is made to access the value of a unexpected expected object.
 
 % constructor with string message.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 bad_expected_access::bad_expected_access(E e); 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
 Constructs an object of class \cpp{bad_expected_access} storing the parameter.
@@ -2894,10 +2856,10 @@ Constructs an object of class \cpp{bad_expected_access} storing the parameter.
 \end{wordingPara}
 
 % error accessor.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 constexpr E const& bad_expected_access::error() const; 
 E& bad_expected_access::error(); 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
 The stored error..
@@ -2926,10 +2888,10 @@ The first function shall be a \cpp{constexpr} function.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % swap free function.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class T, class E>
 void swap(expected<T,E>& x, expected<T,E>& y) noexcept(noexcept(x.swap(y))); 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Effects}
 calls \cpp{x.swap(y)}.
@@ -2940,10 +2902,10 @@ calls \cpp{x.swap(y)}.
 \wordingSubSec{Expected Factories}{expected.factories}
 
 % make_expected move value factory.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class T>
 constexpr expected<typename decay<T>::type> make_expected(T&& v);
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
 \cpp{expected<typename decay<T>::type>(std::forward<T>(v))}.
@@ -2951,11 +2913,11 @@ constexpr expected<typename decay<T>::type> make_expected(T&& v);
 \end{wordingPara}
 
 % make_expected factory.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 expected<exception_ptr, void> make_expected(); 
 template <class E>
 expected<E, void> make_expected(); 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
 \cpp{expected<E,void>(in_place)}.
@@ -2963,10 +2925,10 @@ expected<E, void> make_expected();
 \end{wordingPara}
 
 % make_expected_from_error factory.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class T>
 expected<exception_ptr,T> make_expected_from_exception(std::exception_ptr v); 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
 \cpp{expected<exception_ptr,T>(unexpected_type<E>(std::forward<E>(v)))}.
@@ -2974,10 +2936,10 @@ expected<exception_ptr,T> make_expected_from_exception(std::exception_ptr v);
 \end{wordingPara}
 
 % make_expected_from_error factory.
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class T, class E>
 constexpr expected<decay_t<E>,T> make_expected_from_error(E e);
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
 \cpp{expected<decay_t<E>,T>(make_unexpected(e));}
@@ -2986,10 +2948,10 @@ constexpr expected<decay_t<E>,T> make_expected_from_error(E e);
 
 
 % make_expected_from_error factory (flying exception).
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class T>
 constexpr expected<exception_ptr,T> make_expected_from_current_exception(); 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Returns}
 \cpp{expected<exception_ptr,T>(make_unexpected_from_current_exception())}
@@ -2997,13 +2959,13 @@ constexpr expected<exception_ptr,T> make_expected_from_current_exception();
 \end{wordingPara}
 
 % make_expected_from_call
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class F>
 constexpr typename expected<result_of<F()>::type make_expected_from_call(F funct);
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Equivalent to}
-\begin{alltt}
+\begin{lstlisting}
   try
   {
     return make_expected(funct());
@@ -3012,16 +2974,16 @@ constexpr typename expected<result_of<F()>::type make_expected_from_call(F funct
   {
     return make_unexpected_from_current_exception();
   }
-\end{alltt}
+\end{lstlisting}
 \end{wordingTextItem}
 \end{wordingPara}
 
 \wordingSubSec{Hash support}{expected.hash}
 
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class T, class E>
 struct hash<expected<T,E>>; 
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Requires}
 The template specialization \cpp{hash<T>} and \cpp{hash<E>} shall meet the requirements of class template \cpp{hash} (Z.X.Y). The template specialization \cpp{hash<expected<T,E>>} shall meet the requirements of class template \cpp{hash}. For an object \cpp{e} of type \\
@@ -3029,10 +2991,10 @@ The template specialization \cpp{hash<T>} and \cpp{hash<E>} shall meet the requi
 \end{wordingTextItem}
 \end{wordingPara}
 
-\begin{alltt}
+\begin{lstlisting}[language=C++][xleftmargin=0pt]
 template <class E>
 struct hash<expected<void, E>>;
-\end{alltt}
+\end{lstlisting}
 \begin{wordingPara}
 \begin{wordingTextItem}{Requires}
 \end{wordingTextItem}
