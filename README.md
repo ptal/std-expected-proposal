@@ -1,3 +1,7 @@
+This proposal has moved to this repository https://github.com/viboes/std-make/blob/master/doc/proposal/expected/
+Please, add any issues in the new repository.
+
+
 std-expected-proposal
 =====================
 
